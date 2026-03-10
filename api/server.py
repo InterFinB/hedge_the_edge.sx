@@ -11,6 +11,7 @@ from portfolio_engine.data_loader import load_price_data
 from portfolio_engine.optimizer import optimize_portfolio
 from portfolio_engine.risk import compute_portfolio_volatility, compute_portfolio_return
 from portfolio_engine.input_parser import parse_percentage_input
+import explanation_layer.explanation
 
 app = FastAPI(title="RM Agent API")
 
@@ -38,6 +39,8 @@ def generate_portfolio(request: PortfolioRequest):
 
         clean_weights = {k: float(v) for k, v in dict(weights).items()}
 
+        feasible = None
+
         response = {
             "desired_return": f"{target_return:.2%}",
             "expected_portfolio_return": f"{portfolio_return:.2%}",
@@ -58,6 +61,17 @@ def generate_portfolio(request: PortfolioRequest):
             )
         else:
             response["message"] = "Minimum-risk portfolio for the requested return."
+
+        explanation = explanation_layer.explanation.generate_explanation(
+            desired_return=target_return,
+            expected_portfolio_return=portfolio_return,
+            portfolio_volatility=portfolio_volatility,
+            weights=clean_weights,
+            feasible=feasible,
+            max_weight_constraint=0.35,
+        )
+
+        response["explanation"] = explanation
 
         return response
 
