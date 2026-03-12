@@ -2,6 +2,7 @@ from pypfopt import EfficientFrontier
 from portfolio_engine.returns import compute_expected_returns
 from portfolio_engine.covariance import compute_covariance_matrix
 
+
 def optimize_portfolio(target_return, price_data):
     mu = compute_expected_returns(price_data)
     cov_matrix = compute_covariance_matrix(price_data)

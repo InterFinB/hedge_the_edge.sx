@@ -56,7 +56,13 @@ def generate_portfolio(request: PortfolioRequest):
         portfolio_volatility = float(compute_portfolio_volatility(weights, price_data))
         portfolio_return = float(compute_portfolio_return(weights, price_data))
 
-        clean_weights = {k: float(v) for k, v in dict(weights).items()}
+        raw_weights = {k: float(v) for k, v in dict(weights).items()}
+
+        clean_weights = {
+            k: v
+            for k, v in raw_weights.items()
+            if v > 0.001
+        }
 
         feasible = None
 
@@ -85,7 +91,7 @@ def generate_portfolio(request: PortfolioRequest):
             desired_return=target_return,
             expected_portfolio_return=portfolio_return,
             portfolio_volatility=portfolio_volatility,
-            weights=clean_weights,
+            weights=raw_weights,
             feasible=feasible,
             max_weight_constraint=0.35,
         )
