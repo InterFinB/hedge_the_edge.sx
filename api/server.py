@@ -7,11 +7,12 @@ import traceback
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from portfolio_engine import data_loader
 from portfolio_engine.data_loader import load_price_data
 from portfolio_engine.optimizer import optimize_portfolio
 from portfolio_engine.risk import compute_portfolio_volatility, compute_portfolio_return
 from portfolio_engine.input_parser import parse_percentage_input
-import explanation_layer.explanation
+from explanation_layer.explanation import generate_explanation
 
 app = FastAPI(title="RM Agent API")
 
@@ -24,6 +25,24 @@ class PortfolioRequest(BaseModel):
 @app.get("/")
 def home():
     return {"message": "RM Agent API is running"}
+
+
+@app.get("/cache-status")
+def cache_status():
+    return {
+        "cache_timestamp": str(data_loader._cache_timestamp),
+        "cache_loaded": data_loader._cached_price_data is not None
+    }
+
+
+@app.post("/refresh-data")
+def refresh_data():
+    price_data = load_price_data(force_refresh=True)
+    return {
+        "message": "Market data cache refreshed successfully.",
+        "rows": len(price_data),
+        "columns": len(price_data.columns)
+    }
 
 
 @app.post("/portfolio")
@@ -62,7 +81,7 @@ def generate_portfolio(request: PortfolioRequest):
         else:
             response["message"] = "Minimum-risk portfolio for the requested return."
 
-        explanation = explanation_layer.explanation.generate_explanation(
+        explanation = generate_explanation(
             desired_return=target_return,
             expected_portfolio_return=portfolio_return,
             portfolio_volatility=portfolio_volatility,
