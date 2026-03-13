@@ -12,7 +12,12 @@ from portfolio_engine.data_loader import load_price_data
 from portfolio_engine.optimizer import optimize_portfolio
 from portfolio_engine.risk import compute_portfolio_volatility, compute_portfolio_return
 from portfolio_engine.input_parser import parse_percentage_input
-from explanation_layer.explanation import generate_explanation
+from portfolio_engine.diagnostics import (
+    compute_risk_contributions,
+    compute_concentration,
+    compute_diversification_ratio,
+)
+from explanation_layer.explanation import generate_explanation_bullets
 
 app = FastAPI(title="RM Agent API")
 
@@ -59,10 +64,50 @@ def generate_portfolio(request: PortfolioRequest):
         raw_weights = {k: float(v) for k, v in dict(weights).items()}
 
         clean_weights = {
-            k: v
+            k: f"{round(v * 100, 2)}%"
             for k, v in raw_weights.items()
             if v > 0.001
         }
+
+        risk_contributions = compute_risk_contributions(raw_weights, price_data)
+
+        total_absolute_risk = sum(abs(v) for v in risk_contributions.values())
+
+        if total_absolute_risk == 0:
+            clean_risk_contributions = {}
+        else:
+            clean_risk_contributions = {}
+
+            for k, v in risk_contributions.items():
+                if raw_weights.get(k, 0) <= 0.001:
+                    continue
+
+                percent = (abs(v) / total_absolute_risk) * 100
+
+                if v < 0:
+                    percent = -percent
+                    effect = "risk-reducing"
+                else:
+                    effect = "risk-increasing"
+
+                clean_risk_contributions[k] = f"{round(percent, 2)}% ({effect})"
+
+        concentration = float(compute_concentration(raw_weights))
+        diversification_ratio = float(compute_diversification_ratio(raw_weights, price_data))
+
+        if diversification_ratio < 1.2:
+            diversification_level = "low"
+        elif diversification_ratio <= 1.5:
+            diversification_level = "moderate"
+        else:
+            diversification_level = "strong"
+
+        if concentration < 0.15:
+            concentration_level = "low"
+        elif concentration <= 0.25:
+            concentration_level = "moderate"
+        else:
+            concentration_level = "high"
 
         feasible = None
 
@@ -70,7 +115,24 @@ def generate_portfolio(request: PortfolioRequest):
             "desired_return": f"{target_return:.2%}",
             "expected_portfolio_return": f"{portfolio_return:.2%}",
             "portfolio_volatility": f"{portfolio_volatility:.2%}",
-            "weights": clean_weights,
+            "weights_percent": clean_weights,
+            "risk_contributions": clean_risk_contributions,
+
+            "diversification_ratio": round(diversification_ratio, 3),
+            "diversification_level": diversification_level,
+            "diversification_ratio_benchmark": {
+                "low": "< 1.2",
+                "moderate": "1.2 - 1.5",
+                "strong": "> 1.5"
+            },
+
+            "concentration_index": round(concentration, 3),
+            "concentration_level": concentration_level,
+            "concentration_index_benchmark": {
+                "low_concentration": "< 0.15",
+                "moderate_concentration": "0.15 - 0.25",
+                "high_concentration": "> 0.25"
+            },
         }
 
         if request.max_volatility is not None and request.max_volatility.strip() != "":
@@ -87,16 +149,19 @@ def generate_portfolio(request: PortfolioRequest):
         else:
             response["message"] = "Minimum-risk portfolio for the requested return."
 
-        explanation = generate_explanation(
+        explanation_bullets = generate_explanation_bullets(
             desired_return=target_return,
             expected_portfolio_return=portfolio_return,
             portfolio_volatility=portfolio_volatility,
             weights=raw_weights,
+            risk_contributions=risk_contributions,
+            diversification_ratio=diversification_ratio,
+            concentration=concentration,
             feasible=feasible,
             max_weight_constraint=0.35,
         )
 
-        response["explanation"] = explanation
+        response["explanation_bullets"] = explanation_bullets
 
         return response
 

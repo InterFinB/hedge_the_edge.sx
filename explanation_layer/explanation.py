@@ -1,107 +1,147 @@
-def generate_explanation(
+def generate_explanation_bullets(
     desired_return,
     expected_portfolio_return,
     portfolio_volatility,
     weights,
+    risk_contributions,
+    diversification_ratio,
+    concentration,
     feasible=None,
     max_weight_constraint=0.35
 ):
     """
-    Generate a financially richer human-readable explanation
-    of the portfolio recommendation.
+    Generate readable bullet-point explanations for the portfolio recommendation.
     """
 
-    # Assets that are actually used
-    active_assets = {k: v for k, v in weights.items() if v > 0.001}
+    bullets = []
 
-    # Assets effectively excluded
+    active_assets = {k: v for k, v in weights.items() if v > 0.001}
     zero_weight_assets = [k for k, v in weights.items() if v <= 0.001]
 
-    # Sort by descending weight
     sorted_assets = sorted(active_assets.items(), key=lambda x: x[1], reverse=True)
-
     top_assets = sorted_assets[:3]
-    top_text = ", ".join([f"{asset} ({weight:.1%})" for asset, weight in top_assets])
 
-    explanation_parts = []
+    sorted_risk = sorted(risk_contributions.items(), key=lambda x: x[1], reverse=True)
+    top_risk_assets = [asset for asset, contrib in sorted_risk if contrib > 0][:3]
+    negative_risk_assets = [asset for asset, contrib in risk_contributions.items() if contrib < 0]
 
-    # Core portfolio description
-    explanation_parts.append(
-        f"To achieve the requested return of {desired_return:.2%}, the model constructed "
-        f"a portfolio with an expected return of {expected_portfolio_return:.2%} and an "
-        f"estimated volatility of {portfolio_volatility:.2%}."
+    bullets.append(
+        f"Requested return: {desired_return:.2%}. "
+        f"Estimated portfolio return: {expected_portfolio_return:.2%}. "
+        f"Estimated portfolio volatility: {portfolio_volatility:.2%}."
     )
 
-    # Top allocations
     if top_assets:
-        explanation_parts.append(
-            f"The largest allocations were made to {top_text}, because these assets "
-            f"offered the most efficient contribution to the portfolio's return-risk trade-off "
-            f"under the optimization constraints."
+        top_alloc_text = ", ".join(
+            [f"{asset} ({weight:.1%})" for asset, weight in top_assets]
+        )
+        bullets.append(
+            f"Top allocations: {top_alloc_text}. These assets offered the most efficient "
+            f"return-risk tradeoff under the optimization constraints."
         )
 
-    # Asset role classification
     defensive_assets = []
     growth_assets = []
     diversifiers = []
+    defensive_equity = []
+    cyclical_assets = []
 
     for asset in active_assets.keys():
         if asset in ["AGG", "TLT", "LQD"]:
             defensive_assets.append(asset)
-        elif asset in ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "SPY", "QQQ"]:
+
+        elif asset in ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "QQQ", "SPY", "IJR", "VWO"]:
             growth_assets.append(asset)
-        elif asset in ["GLD", "DBC", "XLV", "VNQ", "VEA", "VWO"]:
+
+        elif asset in ["GLD", "DBC", "VEA", "VNQ", "XLV", "XLF", "XLE", "XLI"]:
             diversifiers.append(asset)
 
+        if asset in ["JNJ", "UNH", "XLV"]:
+            defensive_equity.append(asset)
+
+        if asset in ["XOM", "XLE", "DBC"]:
+            cyclical_assets.append(asset)
+
     if defensive_assets:
-        explanation_parts.append(
-            f"Defensive assets such as {', '.join(defensive_assets)} help reduce total "
-            f"portfolio volatility and stabilize the allocation."
+        bullets.append(
+            f"Defensive exposure: {', '.join(defensive_assets)}. These assets help reduce overall volatility."
+        )
+
+    if defensive_equity:
+        bullets.append(
+            f"Defensive equity exposure: {', '.join(defensive_equity)}. These assets can support returns while usually being less volatile than high-growth equities."
         )
 
     if diversifiers:
-        explanation_parts.append(
-            f"Diversifying assets such as {', '.join(diversifiers)} improve stability by "
-            f"adding exposure to different sectors or market drivers, which reduces dependence "
-            f"on a single source of return."
+        bullets.append(
+            f"Diversification support: {', '.join(diversifiers)}. These assets add exposure to different market drivers."
         )
 
     if growth_assets:
-        explanation_parts.append(
-            f"Growth-oriented exposure through {', '.join(growth_assets)} helps the portfolio "
-            f"reach the desired return target."
+        bullets.append(
+            f"Growth exposure: {', '.join(growth_assets)}. These assets help the portfolio reach the return target."
         )
 
-    # Explain excluded assets
-    if zero_weight_assets:
-        excluded_preview = ", ".join(zero_weight_assets[:5])
-        explanation_parts.append(
-            f"Some assets, such as {excluded_preview}, received zero or near-zero weight because "
-            f"they did not improve the portfolio's return-risk balance enough under the current "
-            f"market estimates and constraints."
+    if cyclical_assets:
+        bullets.append(
+            f"Cyclical / inflation-sensitive exposure: {', '.join(cyclical_assets)}. These assets can behave differently from bonds or defensive equities and improve diversification."
         )
 
-    # Explain concentration cap if binding
-    capped_assets = [asset for asset, weight in active_assets.items() if abs(weight - max_weight_constraint) < 0.001]
+    if top_risk_assets:
+        bullets.append(
+            f"Main risk contributors: {', '.join(top_risk_assets)}. These assets account for the largest share of portfolio risk."
+        )
 
+    if negative_risk_assets:
+        bullets.append(
+            f"Negative risk contributors: {', '.join(negative_risk_assets)}. A negative contribution means these assets help offset the risk of the rest of the portfolio because of their covariance structure. In practice, they act as hedges and reduce total portfolio volatility."
+        )
+
+    if diversification_ratio < 1.2:
+        div_comment = "This suggests relatively weak diversification."
+    elif diversification_ratio <= 1.5:
+        div_comment = "This suggests moderate diversification."
+    else:
+        div_comment = "This suggests strong diversification."
+
+    bullets.append(
+        f"Diversification ratio: {diversification_ratio:.2f}. Typical interpretation: below 1.2 is low, 1.2 to 1.5 is moderate, and above 1.5 is strong. {div_comment}"
+    )
+
+    if concentration < 0.15:
+        conc_comment = "This suggests low concentration."
+    elif concentration <= 0.25:
+        conc_comment = "This suggests moderate concentration."
+    else:
+        conc_comment = "This suggests high concentration."
+
+    bullets.append(
+        f"Concentration index: {concentration:.3f}. Typical interpretation: below 0.15 is low concentration, 0.15 to 0.25 is moderate, and above 0.25 is high. {conc_comment}"
+    )
+
+    capped_assets = [
+        asset for asset, weight in active_assets.items()
+        if abs(weight - max_weight_constraint) < 0.001
+    ]
     if capped_assets:
-        explanation_parts.append(
-            f"The allocation was also shaped by the maximum weight constraint of "
-            f"{max_weight_constraint:.0%} per asset. This cap was binding for "
-            f"{', '.join(capped_assets)}, which prevented the optimizer from concentrating "
-            f"too heavily in a small number of low-risk assets."
+        bullets.append(
+            f"Constraint effect: the maximum weight cap of {max_weight_constraint:.0%} was binding for "
+            f"{', '.join(capped_assets)}."
         )
 
-    # Feasibility / downside tolerance
+    if zero_weight_assets:
+        preview = ", ".join(zero_weight_assets[:5])
+        bullets.append(
+            f"Excluded or near-zero-weight assets: {preview}. These assets did not improve the portfolio enough under current estimates."
+        )
+
     if feasible is True:
-        explanation_parts.append(
-            "The portfolio also satisfies the user's downside tolerance constraint, meaning "
-            "the requested return is achievable within the selected risk limit."
+        bullets.append(
+            "Risk tolerance check: the portfolio satisfies the user's downside tolerance."
         )
     elif feasible is False:
-        explanation_parts.append(
-            "However, the portfolio exceeds the user's downside tolerance, which means the "
-            "requested return appears to require more risk than the user is comfortable accepting."
+        bullets.append(
+            "Risk tolerance check: the portfolio exceeds the user's downside tolerance."
         )
 
-    return " ".join(explanation_parts)
+    return bullets
