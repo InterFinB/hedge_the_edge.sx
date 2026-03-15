@@ -1,36 +1,42 @@
-TICKERS = [
+ASSET_UNIVERSE = [
     # Large-cap stocks
-    "AAPL",
-    "MSFT",
-    "NVDA",
-    "AMZN",
-    "GOOGL",
-    "META",
-    "JPM",
-    "XOM",
-    "JNJ",
-    "UNH",
+    {"ticker": "AAPL", "name": "Apple", "category": "Large-Cap Stocks"},
+    {"ticker": "MSFT", "name": "Microsoft", "category": "Large-Cap Stocks"},
+    {"ticker": "NVDA", "name": "NVIDIA", "category": "Large-Cap Stocks"},
+    {"ticker": "AMZN", "name": "Amazon", "category": "Large-Cap Stocks"},
+    {"ticker": "GOOGL", "name": "Alphabet", "category": "Large-Cap Stocks"},
+    {"ticker": "META", "name": "Meta", "category": "Large-Cap Stocks"},
+    {"ticker": "JPM", "name": "JPMorgan Chase", "category": "Large-Cap Stocks"},
+    {"ticker": "XOM", "name": "Exxon Mobil", "category": "Large-Cap Stocks"},
+    {"ticker": "JNJ", "name": "Johnson & Johnson", "category": "Large-Cap Stocks"},
+    {"ticker": "UNH", "name": "UnitedHealth Group", "category": "Large-Cap Stocks"},
 
     # Broad market and sector ETFs
-    "SPY",
-    "QQQ",
-    "XLV",
-    "XLF",
-    "XLE",
-    "XLI",
+    {"ticker": "SPY", "name": "SPDR S&P 500 ETF", "category": "Broad Market and Sector ETFs"},
+    {"ticker": "QQQ", "name": "Invesco QQQ Trust", "category": "Broad Market and Sector ETFs"},
+    {"ticker": "XLV", "name": "Health Care Select Sector SPDR Fund", "category": "Broad Market and Sector ETFs"},
+    {"ticker": "XLF", "name": "Financial Select Sector SPDR Fund", "category": "Broad Market and Sector ETFs"},
+    {"ticker": "XLE", "name": "Energy Select Sector SPDR Fund", "category": "Broad Market and Sector ETFs"},
+    {"ticker": "XLI", "name": "Industrial Select Sector SPDR Fund", "category": "Broad Market and Sector ETFs"},
 
     # International and style ETFs
-    "VEA",
-    "VWO",
-    "IJR",
+    {"ticker": "VEA", "name": "Vanguard FTSE Developed Markets ETF", "category": "International and Style ETFs"},
+    {"ticker": "VWO", "name": "Vanguard FTSE Emerging Markets ETF", "category": "International and Style ETFs"},
+    {"ticker": "IJR", "name": "iShares Core S&P Small-Cap ETF", "category": "International and Style ETFs"},
 
     # Bonds and alternative assets
-    "AGG",
-    "TLT",
-    "LQD",
-    "GLD",
-    "DBC",
-    "VNQ"
+    {"ticker": "AGG", "name": "iShares Core U.S. Aggregate Bond ETF", "category": "Bonds and Alternative Assets"},
+    {"ticker": "TLT", "name": "iShares 20+ Year Treasury Bond ETF", "category": "Bonds and Alternative Assets"},
+    {"ticker": "LQD", "name": "iShares iBoxx $ Investment Grade Corporate Bond ETF", "category": "Bonds and Alternative Assets"},
+    {"ticker": "GLD", "name": "SPDR Gold Shares", "category": "Bonds and Alternative Assets"},
+    {"ticker": "DBC", "name": "Invesco DB Commodity Index Tracking Fund", "category": "Bonds and Alternative Assets"},
+    {"ticker": "VNQ", "name": "Vanguard Real Estate ETF", "category": "Bonds and Alternative Assets"},
 ]
+
+TICKERS = [asset["ticker"] for asset in ASSET_UNIVERSE]
+
+TICKER_TO_NAME = {asset["ticker"]: asset["name"] for asset in ASSET_UNIVERSE}
+
+TICKER_TO_CATEGORY = {asset["ticker"]: asset["category"] for asset in ASSET_UNIVERSE}
 
 START_DATE = "2020-01-01"

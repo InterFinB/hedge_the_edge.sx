@@ -63,21 +63,25 @@ def generate_portfolio(request: PortfolioRequest):
 
         raw_weights = {k: float(v) for k, v in dict(weights).items()}
 
-        clean_weights = {
-            k: f"{round(v * 100, 2)}%"
+        chart_weights = {
+            k: float(v)
             for k, v in raw_weights.items()
             if v > 0.001
         }
 
-        risk_contributions = compute_risk_contributions(raw_weights, price_data)
+        clean_weights = {
+            k: f"{round(v * 100, 2)}%"
+            for k, v in chart_weights.items()
+        }
 
+        risk_contributions = compute_risk_contributions(raw_weights, price_data)
         total_absolute_risk = sum(abs(v) for v in risk_contributions.values())
 
-        if total_absolute_risk == 0:
-            clean_risk_contributions = {}
-        else:
-            clean_risk_contributions = {}
+        clean_risk_contributions = {}
+        risk_effects = {}
+        chart_risk_contributions = {}
 
+        if total_absolute_risk != 0:
             for k, v in risk_contributions.items():
                 if raw_weights.get(k, 0) <= 0.001:
                     continue
@@ -90,7 +94,9 @@ def generate_portfolio(request: PortfolioRequest):
                 else:
                     effect = "risk-increasing"
 
-                clean_risk_contributions[k] = f"{round(percent, 2)}% ({effect})"
+                clean_risk_contributions[k] = f"{round(percent, 2)}%"
+                risk_effects[k] = effect
+                chart_risk_contributions[k] = round(percent, 4)
 
         concentration = float(compute_concentration(raw_weights))
         diversification_ratio = float(compute_diversification_ratio(raw_weights, price_data))
@@ -117,21 +123,14 @@ def generate_portfolio(request: PortfolioRequest):
             "portfolio_volatility": f"{portfolio_volatility:.2%}",
             "weights_percent": clean_weights,
             "risk_contributions": clean_risk_contributions,
-
+            "risk_effects": risk_effects,
             "diversification_ratio": round(diversification_ratio, 3),
             "diversification_level": diversification_level,
-            "diversification_ratio_benchmark": {
-                "low": "< 1.2",
-                "moderate": "1.2 - 1.5",
-                "strong": "> 1.5"
-            },
-
             "concentration_index": round(concentration, 3),
             "concentration_level": concentration_level,
-            "concentration_index_benchmark": {
-                "low_concentration": "< 0.15",
-                "moderate_concentration": "0.15 - 0.25",
-                "high_concentration": "> 0.25"
+            "chart_data": {
+                "weights": chart_weights,
+                "risk_contributions": chart_risk_contributions,
             },
         }
 
