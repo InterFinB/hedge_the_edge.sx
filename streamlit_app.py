@@ -111,6 +111,18 @@ def build_risk_contributions_df(chart_data: dict) -> pd.DataFrame:
     return df
 
 
+def build_simulation_distribution_df(chart_data: dict) -> pd.DataFrame:
+    distribution = chart_data.get("simulation_distribution", [])
+    if not distribution:
+        return pd.DataFrame(columns=["Return (%)", "Frequency"])
+
+    df = pd.DataFrame(distribution)
+    df["Return (%)"] = df["bin_center"] * 100
+    df["Frequency"] = df["frequency"]
+    df = df[["Return (%)", "Frequency"]]
+    return df
+
+
 def render_status_banner(data: dict):
     if "feasible" in data:
         if data["feasible"]:
@@ -218,6 +230,56 @@ def render_diagnostics(data: dict):
     st.write(f"**Concentration level:** {data.get('concentration_level', '-')}")
 
 
+def render_simulation_summary(data: dict):
+    simulation = data.get("simulation", {})
+    if not simulation:
+        return
+
+    st.subheader("Monte Carlo Simulation")
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    col1.metric("Mean Return", simulation.get("mean_return", "-"))
+    col2.metric("Median Return", simulation.get("median_return", "-"))
+    col3.metric("Loss Probability", simulation.get("loss_probability", "-"))
+    col4.metric("5th Percentile", simulation.get("percentile_5", "-"))
+    col5.metric("95th Percentile", simulation.get("percentile_95", "-"))
+
+    st.caption(
+        "The Monte Carlo simulation models a range of possible 1-year portfolio outcomes "
+        "based on expected returns and covariance estimates."
+    )
+
+
+def render_simulation_distribution_chart(simulation_df: pd.DataFrame):
+    st.subheader("Simulated Return Distribution")
+
+    if simulation_df.empty:
+        st.write("No simulation distribution data available.")
+        return
+
+    fig = px.bar(
+        simulation_df,
+        x="Return (%)",
+        y="Frequency",
+    )
+
+    fig.update_traces(
+        hovertemplate=(
+            "Return bin center: %{x:.2f}%<br>"
+            "Frequency: %{y}<extra></extra>"
+        )
+    )
+
+    fig.update_layout(
+        margin=dict(t=20, b=20, l=20, r=20),
+        xaxis_title="Simulated 1-Year Return (%)",
+        yaxis_title="Frequency",
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
 def render_explanation(data: dict):
     bullets = data.get("explanation_bullets", [])
     if bullets:
@@ -266,6 +328,7 @@ if submitted:
                 chart_data = data.get("chart_data", {})
                 weights_df = build_weights_df(chart_data)
                 risk_df = build_risk_contributions_df(chart_data)
+                simulation_df = build_simulation_distribution_df(chart_data)
 
                 chart_col1, chart_col2 = st.columns(2)
 
@@ -288,6 +351,8 @@ if submitted:
                     )
 
                 render_diagnostics(data)
+                render_simulation_summary(data)
+                render_simulation_distribution_chart(simulation_df)
                 render_explanation(data)
 
                 with st.expander("Important assumptions"):
@@ -298,6 +363,7 @@ if submitted:
 - The maximum asset weight constraint is 35%.
 - Expected returns are based on historical estimates and are clipped for realism.
 - Covariance estimation uses Ledoit-Wolf shrinkage.
+- Monte Carlo results are model-based simulations, not forecasts.
 - This tool is educational and does not constitute personal financial advice.
 """
                     )

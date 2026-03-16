@@ -17,6 +17,11 @@ from portfolio_engine.diagnostics import (
     compute_concentration,
     compute_diversification_ratio,
 )
+from portfolio_engine.simulation import (
+    simulate_portfolio_annual_returns,
+    summarize_simulation_results,
+    prepare_simulation_chart_data,
+)
 from explanation_layer.explanation import generate_explanation_bullets
 
 app = FastAPI(title="RM Agent API")
@@ -36,7 +41,7 @@ def home():
 def cache_status():
     return {
         "cache_timestamp": str(data_loader._cache_timestamp),
-        "cache_loaded": data_loader._cached_price_data is not None
+        "cache_loaded": data_loader._cached_price_data is not None,
     }
 
 
@@ -46,7 +51,7 @@ def refresh_data():
     return {
         "message": "Market data cache refreshed successfully.",
         "rows": len(price_data),
-        "columns": len(price_data.columns)
+        "columns": len(price_data.columns),
     }
 
 
@@ -99,7 +104,19 @@ def generate_portfolio(request: PortfolioRequest):
                 chart_risk_contributions[k] = round(percent, 4)
 
         concentration = float(compute_concentration(raw_weights))
-        diversification_ratio = float(compute_diversification_ratio(raw_weights, price_data))
+        diversification_ratio = float(
+            compute_diversification_ratio(raw_weights, price_data)
+        )
+
+        simulated_returns = simulate_portfolio_annual_returns(
+            weights=raw_weights,
+            price_data=price_data,
+            n_simulations=5000,
+            random_seed=42,
+        )
+
+        simulation_summary = summarize_simulation_results(simulated_returns)
+        simulation_chart_data = prepare_simulation_chart_data(simulated_returns)
 
         if diversification_ratio < 1.2:
             diversification_level = "low"
@@ -128,9 +145,17 @@ def generate_portfolio(request: PortfolioRequest):
             "diversification_level": diversification_level,
             "concentration_index": round(concentration, 3),
             "concentration_level": concentration_level,
+            "simulation": {
+                "mean_return": f"{simulation_summary['mean_return']:.2%}",
+                "median_return": f"{simulation_summary['median_return']:.2%}",
+                "loss_probability": f"{simulation_summary['loss_probability']:.2%}",
+                "percentile_5": f"{simulation_summary['percentile_5']:.2%}",
+                "percentile_95": f"{simulation_summary['percentile_95']:.2%}",
+            },
             "chart_data": {
                 "weights": chart_weights,
                 "risk_contributions": chart_risk_contributions,
+                "simulation_distribution": simulation_chart_data,
             },
         }
 
@@ -148,17 +173,22 @@ def generate_portfolio(request: PortfolioRequest):
         else:
             response["message"] = "Minimum-risk portfolio for the requested return."
 
-        explanation_bullets = generate_explanation_bullets(
-            desired_return=target_return,
-            expected_portfolio_return=portfolio_return,
-            portfolio_volatility=portfolio_volatility,
-            weights=raw_weights,
-            risk_contributions=risk_contributions,
-            diversification_ratio=diversification_ratio,
-            concentration=concentration,
-            feasible=feasible,
-            max_weight_constraint=0.35,
-        )
+            explanation_bullets = generate_explanation_bullets(
+                desired_return=target_return,
+                expected_portfolio_return=portfolio_return,
+                portfolio_volatility=portfolio_volatility,
+                weights=raw_weights,
+                risk_contributions=risk_contributions,
+                diversification_ratio=diversification_ratio,
+                concentration=concentration,
+                feasible=feasible,
+                max_weight_constraint=0.35,
+                simulation_mean_return=simulation_summary["mean_return"],
+                simulation_median_return=simulation_summary["median_return"],
+                simulation_loss_probability=simulation_summary["loss_probability"],
+                simulation_percentile_5=simulation_summary["percentile_5"],
+                simulation_percentile_95=simulation_summary["percentile_95"],
+            )
 
         response["explanation_bullets"] = explanation_bullets
 
@@ -170,7 +200,10 @@ def generate_portfolio(request: PortfolioRequest):
         if "target_return must be lower than the maximum possible return" in error_message:
             raise HTTPException(
                 status_code=400,
-                detail="The desired return is too high for the current investable universe. Please enter a lower target return."
+                detail=(
+                    "The desired return is too high for the current investable universe. "
+                    "Please enter a lower target return."
+                ),
             )
 
         raise HTTPException(status_code=400, detail=error_message)

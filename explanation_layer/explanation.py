@@ -7,7 +7,12 @@ def generate_explanation_bullets(
     diversification_ratio,
     concentration,
     feasible=None,
-    max_weight_constraint=0.35
+    max_weight_constraint=0.35,
+    simulation_mean_return=None,
+    simulation_median_return=None,
+    simulation_loss_probability=None,
+    simulation_percentile_5=None,
+    simulation_percentile_95=None,
 ):
     """
     Generate readable bullet-point explanations for the portfolio recommendation.
@@ -142,6 +147,47 @@ def generate_explanation_bullets(
     elif feasible is False:
         bullets.append(
             "Risk tolerance check: the portfolio exceeds the user's downside tolerance."
+        )
+
+    # Monte Carlo interpretation
+    if (
+        simulation_mean_return is not None
+        and simulation_median_return is not None
+        and simulation_loss_probability is not None
+        and simulation_percentile_5 is not None
+        and simulation_percentile_95 is not None
+    ):
+        bullets.append(
+            f"Monte Carlo simulation summary: the mean simulated 1-year return is {simulation_mean_return:.2%}, "
+            f"the median is {simulation_median_return:.2%}, and the estimated probability of a negative 1-year return is {simulation_loss_probability:.2%}."
+        )
+
+        bullets.append(
+            f"Monte Carlo range: in a weaker outcome scenario, the 5th percentile simulated return is {simulation_percentile_5:.2%}; "
+            f"in a stronger scenario, the 95th percentile simulated return is {simulation_percentile_95:.2%}."
+        )
+
+        if simulation_loss_probability < 0.10:
+            mc_comment = "This suggests relatively limited modeled downside over a 1-year horizon."
+        elif simulation_loss_probability <= 0.25:
+            mc_comment = "This suggests a meaningful but still moderate modeled chance of loss over a 1-year horizon."
+        else:
+            mc_comment = "This suggests a materially elevated modeled chance of loss over a 1-year horizon."
+
+        bullets.append(
+            f"Monte Carlo interpretation: {mc_comment}"
+        )
+
+        spread = simulation_percentile_95 - simulation_percentile_5
+        if spread < 0.15:
+            spread_comment = "The simulated range is relatively tight, which suggests outcomes are comparatively stable under the model assumptions."
+        elif spread <= 0.30:
+            spread_comment = "The simulated range is moderate, which suggests a noticeable but not extreme spread of possible outcomes."
+        else:
+            spread_comment = "The simulated range is wide, which suggests outcomes are sensitive to market conditions and uncertainty remains significant."
+
+        bullets.append(
+            f"Monte Carlo dispersion: the gap between the 5th and 95th percentile outcomes is {spread:.2%}. {spread_comment}"
         )
 
     return bullets
