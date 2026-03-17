@@ -10,7 +10,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from portfolio_engine import data_loader
 from portfolio_engine.data_loader import load_price_data
 from portfolio_engine.optimizer import optimize_portfolio
-from portfolio_engine.risk import compute_portfolio_volatility, compute_portfolio_return
+from portfolio_engine.risk import (
+    compute_portfolio_volatility,
+    compute_portfolio_return,
+)
 from portfolio_engine.input_parser import parse_percentage_input
 from portfolio_engine.diagnostics import (
     compute_risk_contributions,
@@ -63,8 +66,12 @@ def generate_portfolio(request: PortfolioRequest):
         price_data = load_price_data()
         weights = optimize_portfolio(target_return, price_data)
 
-        portfolio_volatility = float(compute_portfolio_volatility(weights, price_data))
-        portfolio_return = float(compute_portfolio_return(weights, price_data))
+        portfolio_volatility = float(
+            compute_portfolio_volatility(weights, price_data)
+        )
+        portfolio_return = float(
+            compute_portfolio_return(weights, price_data)
+        )
 
         raw_weights = {k: float(v) for k, v in dict(weights).items()}
 
@@ -159,8 +166,14 @@ def generate_portfolio(request: PortfolioRequest):
             },
         }
 
-        if request.max_volatility is not None and request.max_volatility.strip() != "":
-            max_volatility = float(parse_percentage_input(request.max_volatility))
+        if (
+            request.max_volatility is not None
+            and request.max_volatility.strip() != ""
+        ):
+            max_volatility = float(
+                parse_percentage_input(request.max_volatility)
+            )
+
             feasible = bool(portfolio_volatility <= max_volatility)
 
             response["max_allowed_volatility"] = f"{max_volatility:.2%}"
@@ -171,43 +184,49 @@ def generate_portfolio(request: PortfolioRequest):
                 else "This portfolio exceeds the user's downside tolerance."
             )
         else:
-            response["message"] = "Minimum-risk portfolio for the requested return."
-
-            explanation_bullets = generate_explanation_bullets(
-                desired_return=target_return,
-                expected_portfolio_return=portfolio_return,
-                portfolio_volatility=portfolio_volatility,
-                weights=raw_weights,
-                risk_contributions=risk_contributions,
-                diversification_ratio=diversification_ratio,
-                concentration=concentration,
-                feasible=feasible,
-                max_weight_constraint=0.35,
-                simulation_mean_return=simulation_summary["mean_return"],
-                simulation_median_return=simulation_summary["median_return"],
-                simulation_loss_probability=simulation_summary["loss_probability"],
-                simulation_percentile_5=simulation_summary["percentile_5"],
-                simulation_percentile_95=simulation_summary["percentile_95"],
+            response["message"] = (
+                "Minimum-risk portfolio for the requested return."
             )
+
+        explanation_bullets = generate_explanation_bullets(
+            desired_return=target_return,
+            expected_portfolio_return=portfolio_return,
+            portfolio_volatility=portfolio_volatility,
+            weights=raw_weights,
+            risk_contributions=risk_contributions,
+            diversification_ratio=diversification_ratio,
+            concentration=concentration,
+            feasible=feasible,
+            max_weight_constraint=0.35,
+            simulation_mean_return=simulation_summary["mean_return"],
+            simulation_median_return=simulation_summary["median_return"],
+            simulation_loss_probability=simulation_summary["loss_probability"],
+            simulation_percentile_5=simulation_summary["percentile_5"],
+            simulation_percentile_95=simulation_summary["percentile_95"],
+        )
 
         response["explanation_bullets"] = explanation_bullets
 
         return response
 
     except ValueError as e:
-        error_message = str(e)
+        error_message = str(e).lower()
 
-        if "target_return must be lower than the maximum possible return" in error_message:
+        if "maximum feasible return" in error_message:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    "The desired return is too high for the current investable universe. "
-                    "Please enter a lower target return."
-                ),
+                detail=str(e),
             )
 
-        raise HTTPException(status_code=400, detail=error_message)
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
 
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Unexpected server error: {str(e)}")
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected server error: {str(e)}",
+        )

@@ -12,7 +12,7 @@ ASSET_UNIVERSE = [
     {"ticker": "UNH", "name": "UnitedHealth Group", "category": "Large-Cap Stocks"},
 
     # Broad market and sector ETFs
-    {"ticker": "SPY", "name": "SPDR S&P 500 ETF", "category": "Broad Market and Sector ETFs"},
+    {"ticker": "SPY", "name": "SPDR S&P 500 ETF Trust", "category": "Broad Market and Sector ETFs"},
     {"ticker": "QQQ", "name": "Invesco QQQ Trust", "category": "Broad Market and Sector ETFs"},
     {"ticker": "XLV", "name": "Health Care Select Sector SPDR Fund", "category": "Broad Market and Sector ETFs"},
     {"ticker": "XLF", "name": "Financial Select Sector SPDR Fund", "category": "Broad Market and Sector ETFs"},
@@ -40,3 +40,12 @@ TICKER_TO_NAME = {asset["ticker"]: asset["name"] for asset in ASSET_UNIVERSE}
 TICKER_TO_CATEGORY = {asset["ticker"]: asset["category"] for asset in ASSET_UNIVERSE}
 
 START_DATE = "2020-01-01"
+
+# Expected return model configuration
+EXPECTED_RETURN_METHOD = "blended"
+EXPECTED_RETURN_BLEND_WEIGHT = 0.50
+EXPECTED_RETURN_SPAN = 180
+
+MIN_EXPECTED_RETURN = 0.02   # 2%
+MAX_EXPECTED_RETURN = 0.25   # 25%
+BASELINE_EXPECTED_RETURN = 0.08   # 8%

@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import plotly.express as px
 
-from portfolio_engine.config import TICKER_TO_NAME
+from portfolio_engine.config import TICKER_TO_NAME, TICKER_TO_CATEGORY
 
 API_URL = "http://127.0.0.1:8000/portfolio"
 
@@ -27,6 +27,10 @@ def format_asset_name(ticker: str) -> str:
     if name:
         return f"{ticker} ({name})"
     return ticker
+
+
+def get_asset_category(ticker: str) -> str:
+    return TICKER_TO_CATEGORY.get(ticker, "Other")
 
 
 def set_table_index_from_one(df: pd.DataFrame) -> pd.DataFrame:
@@ -71,16 +75,50 @@ def render_risk_contributions_table(title: str, contributions: dict, effects: di
     st.table(df)
 
 
+def render_category_exposure_table(title: str, category_df: pd.DataFrame):
+    st.subheader(title)
+    if category_df.empty:
+        st.write("No data available.")
+        return
+
+    df = category_df.copy()
+    df["Weight"] = df["Weight (%)"].map(lambda x: f"{x:.2f}%")
+    df = df[["Category", "Weight"]]
+    df = set_table_index_from_one(df)
+    st.table(df)
+
+
 def build_weights_df(chart_data: dict) -> pd.DataFrame:
     weights = chart_data.get("weights", {})
     if not weights:
-        return pd.DataFrame(columns=["Asset", "Weight", "Weight (%)"])
+        return pd.DataFrame(columns=["Ticker", "Asset", "Category", "Weight", "Weight (%)"])
 
     df = pd.DataFrame(
-        [{"Asset": asset, "Weight": weight} for asset, weight in weights.items()]
+        [
+            {
+                "Ticker": asset,
+                "Asset": format_asset_name(asset),
+                "Category": get_asset_category(asset),
+                "Weight": weight,
+            }
+            for asset, weight in weights.items()
+        ]
     )
     df["Weight (%)"] = df["Weight"] * 100
     df = df.sort_values("Weight (%)", ascending=False).reset_index(drop=True)
+    return df
+
+
+def build_category_exposure_df(weights_df: pd.DataFrame) -> pd.DataFrame:
+    if weights_df.empty:
+        return pd.DataFrame(columns=["Category", "Weight (%)"])
+
+    df = (
+        weights_df.groupby("Category", as_index=False)["Weight (%)"]
+        .sum()
+        .sort_values("Weight (%)", ascending=False)
+        .reset_index(drop=True)
+    )
     return df
 
 
@@ -159,7 +197,43 @@ def render_allocation_chart(weights_df: pd.DataFrame):
 
     fig = px.pie(
         weights_df,
-        names="Asset",
+        names="Ticker",
+        values="Weight (%)",
+        hole=0.55,
+    )
+
+    fig.update_traces(
+        textinfo="none",
+        hovertemplate=(
+            "<b>%{label}</b><br>"
+            "Asset: %{customdata[0]}<br>"
+            "Category: %{customdata[1]}<br>"
+            "Weight: %{value:.2f}%<extra></extra>"
+        ),
+        customdata=weights_df[["Asset", "Category"]].values,
+        sort=False
+    )
+
+    fig.update_layout(
+        margin=dict(t=20, b=20, l=20, r=20),
+        legend_title_text="Assets",
+        uniformtext_minsize=12,
+        uniformtext_mode="hide",
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def render_category_exposure_chart(category_df: pd.DataFrame):
+    st.subheader("Category Exposure")
+
+    if category_df.empty:
+        st.write("No category exposure data available.")
+        return
+
+    fig = px.pie(
+        category_df,
+        names="Category",
         values="Weight (%)",
         hole=0.55,
     )
@@ -172,7 +246,7 @@ def render_allocation_chart(weights_df: pd.DataFrame):
 
     fig.update_layout(
         margin=dict(t=20, b=20, l=20, r=20),
-        legend_title_text="Assets",
+        legend_title_text="Categories",
         uniformtext_minsize=12,
         uniformtext_mode="hide",
     )
@@ -327,6 +401,7 @@ if submitted:
 
                 chart_data = data.get("chart_data", {})
                 weights_df = build_weights_df(chart_data)
+                category_df = build_category_exposure_df(weights_df)
                 risk_df = build_risk_contributions_df(chart_data)
                 simulation_df = build_simulation_distribution_df(chart_data)
 
@@ -337,6 +412,14 @@ if submitted:
 
                 with chart_col2:
                     render_risk_chart(risk_df)
+
+                category_col1, category_col2 = st.columns(2)
+
+                with category_col1:
+                    render_category_exposure_chart(category_df)
+
+                with category_col2:
+                    render_category_exposure_table("Category Exposure Table", category_df)
 
                 table_col1, table_col2 = st.columns(2)
 
