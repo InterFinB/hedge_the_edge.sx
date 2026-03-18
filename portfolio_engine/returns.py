@@ -6,9 +6,12 @@ from portfolio_engine.config import (
     EXPECTED_RETURN_METHOD,
     EXPECTED_RETURN_BLEND_WEIGHT,
     EXPECTED_RETURN_SPAN,
+    EXPECTED_RETURN_SIGNAL_WEIGHT,
     MIN_EXPECTED_RETURN,
     MAX_EXPECTED_RETURN,
     BASELINE_EXPECTED_RETURN,
+    CATEGORY_BASELINE_RETURNS,
+    TICKER_TO_CATEGORY,
 )
 
 
@@ -76,6 +79,59 @@ def compute_blended_expected_returns(
     return _clip_expected_returns(mu)
 
 
+def compute_category_anchor_expected_returns(price_data: pd.DataFrame) -> pd.Series:
+    """
+    Build a deterministic equilibrium-style anchor return vector based on
+    each asset's configured category.
+
+    Any asset missing category metadata or a category-level anchor falls back
+    to BASELINE_EXPECTED_RETURN.
+    """
+    anchor_values = {}
+
+    for ticker in price_data.columns:
+        category = TICKER_TO_CATEGORY.get(ticker)
+        anchor_return = CATEGORY_BASELINE_RETURNS.get(
+            category,
+            BASELINE_EXPECTED_RETURN,
+        )
+        anchor_values[ticker] = float(anchor_return)
+
+    mu_anchor = pd.Series(anchor_values, index=price_data.columns, dtype=float)
+    mu_anchor = _sanitize_series(mu_anchor, price_data.columns)
+    mu_anchor = mu_anchor.fillna(BASELINE_EXPECTED_RETURN)
+
+    return _clip_expected_returns(mu_anchor)
+
+
+def compute_equilibrium_blended_expected_returns(
+    price_data: pd.DataFrame,
+    signal_weight: float = EXPECTED_RETURN_SIGNAL_WEIGHT,
+    span: int = EXPECTED_RETURN_SPAN,
+) -> pd.Series:
+    """
+    Blend the current deterministic signal model with a category-based
+    equilibrium anchor.
+
+    final_mu = signal_weight * signal_mu + (1 - signal_weight) * anchor_mu
+    """
+    if not 0 <= signal_weight <= 1:
+        raise ValueError("signal_weight must be between 0 and 1.")
+
+    mu_signal = compute_blended_expected_returns(
+        price_data=price_data,
+        blend_weight=EXPECTED_RETURN_BLEND_WEIGHT,
+        span=span,
+    )
+    mu_anchor = compute_category_anchor_expected_returns(price_data)
+
+    mu = signal_weight * mu_signal + (1 - signal_weight) * mu_anchor
+    mu = _sanitize_series(mu, price_data.columns)
+    mu = mu.fillna(BASELINE_EXPECTED_RETURN)
+
+    return _clip_expected_returns(mu)
+
+
 def compute_expected_returns(price_data: pd.DataFrame) -> pd.Series:
     method = EXPECTED_RETURN_METHOD.lower()
 
@@ -88,7 +144,10 @@ def compute_expected_returns(price_data: pd.DataFrame) -> pd.Series:
     if method == "blended":
         return compute_blended_expected_returns(price_data)
 
+    if method == "equilibrium_blended":
+        return compute_equilibrium_blended_expected_returns(price_data)
+
     raise ValueError(
         f"Unsupported EXPECTED_RETURN_METHOD: {EXPECTED_RETURN_METHOD}. "
-        "Use 'historical', 'exponential', or 'blended'."
+        "Use 'historical', 'exponential', 'blended', or 'equilibrium_blended'."
     )

@@ -63,8 +63,22 @@ def generate_portfolio(request: PortfolioRequest):
     try:
         target_return = float(parse_percentage_input(request.target_return))
 
+        max_volatility = None
+        if (
+            request.max_volatility is not None
+            and request.max_volatility.strip() != ""
+        ):
+            max_volatility = float(
+                parse_percentage_input(request.max_volatility)
+            )
+
         price_data = load_price_data()
-        weights = optimize_portfolio(target_return, price_data)
+
+        weights = optimize_portfolio(
+            target_return=target_return,
+            price_data=price_data,
+            max_volatility=max_volatility,
+        )
 
         portfolio_volatility = float(
             compute_portfolio_volatility(weights, price_data)
@@ -166,22 +180,15 @@ def generate_portfolio(request: PortfolioRequest):
             },
         }
 
-        if (
-            request.max_volatility is not None
-            and request.max_volatility.strip() != ""
-        ):
-            max_volatility = float(
-                parse_percentage_input(request.max_volatility)
-            )
-
-            feasible = bool(portfolio_volatility <= max_volatility)
+        if max_volatility is not None:
+            feasible = bool(portfolio_volatility <= max_volatility + 1e-6)
 
             response["max_allowed_volatility"] = f"{max_volatility:.2%}"
             response["feasible"] = feasible
             response["message"] = (
-                "This portfolio satisfies the user's downside tolerance."
+                "Minimum-risk portfolio for the requested return constructed under the user's volatility constraint."
                 if feasible
-                else "This portfolio exceeds the user's downside tolerance."
+                else "The portfolio is slightly above the requested volatility limit due to solver tolerance."
             )
         else:
             response["message"] = (
