@@ -50,11 +50,11 @@ START_DATE = "2020-01-01"
 EXPECTED_RETURN_METHOD = "equilibrium_blended"
 
 # Existing signal model settings
-EXPECTED_RETURN_BLEND_WEIGHT = 0.65
+EXPECTED_RETURN_BLEND_WEIGHT = 0.50
 EXPECTED_RETURN_SPAN = 180
 
-# New equilibrium-anchor blend setting
-# final_mu = weight * signal_mu + (1 - weight) * anchor_mu
+# Equilibrium-anchor blend setting
+# final_mu = signal_weight * signal_mu + (1 - signal_weight) * anchor_mu
 EXPECTED_RETURN_SIGNAL_WEIGHT = 0.50
 
 MIN_EXPECTED_RETURN = 0.02   # 2%
@@ -64,7 +64,10 @@ BASELINE_EXPECTED_RETURN = 0.08   # 8%
 # Deterministic category-based equilibrium anchors
 CATEGORY_BASELINE_RETURNS = {
     "Large-Cap Stocks": 0.11,
-    "Broad Market and Sector ETFs": 0.11,
+    "Broad Market and Sector ETFs": 0.10,
     "International and Style ETFs": 0.10,
     "Bonds and Alternative Assets": 0.05,
 }
+
+# Optimizer configuration
+OPTIMIZER_REGULARIZATION_STRENGTH = 0.05
