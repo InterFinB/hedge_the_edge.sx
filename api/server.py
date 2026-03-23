@@ -25,7 +25,7 @@ from portfolio_engine.simulation import (
     summarize_simulation_results,
     prepare_simulation_chart_data,
 )
-from explanation_layer.explanation import generate_explanation_bullets
+from explanation_layer import generate_explanation_bullets
 
 app = FastAPI(title="RM Agent API")
 
