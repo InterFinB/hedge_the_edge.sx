@@ -22,19 +22,19 @@ def generate_portfolio_summary(
     bullets.append(
         f"Target return: {desired_return:.2%}. "
         f"Expected return: {expected_portfolio_return:.2%}. "
-        f"Risk: {portfolio_volatility:.2%}."
+        f"Volatility: {portfolio_volatility:.2%}."
     )
 
     if top_assets:
         top_alloc_text = ", ".join(
             f"{asset} ({weight:.1%})" for asset, weight in top_assets
         )
-        bullets.append(f"Largest holdings: {top_alloc_text}.")
+        bullets.append(f"Largest allocations: {top_alloc_text}.")
 
     div_level = classify_diversification(diversification_ratio)
     if div_level == "low":
         bullets.append(
-            f"Diversification is limited ({diversification_ratio:.2f})."
+            f"Diversification is weak ({diversification_ratio:.2f})."
         )
     elif div_level == "moderate":
         bullets.append(
@@ -52,17 +52,17 @@ def generate_portfolio_summary(
         )
     elif conc_level == "moderate":
         bullets.append(
-            f"Concentration is moderate ({concentration:.3f}). A few holdings matter more than the rest."
+            f"Concentration is moderate ({concentration:.3f}). Portfolio dependence on the largest positions is noticeable."
         )
     else:
         bullets.append(
-            f"Concentration is high ({concentration:.3f}). The portfolio depends heavily on a few positions."
+            f"Concentration is high ({concentration:.3f}). Portfolio dependence on a small number of positions is elevated."
         )
 
     capped_assets = find_capped_assets(weights, max_weight_constraint=max_weight_constraint)
     if capped_assets:
         bullets.append(
-            f"Weight cap reached: {', '.join(capped_assets)} hit the {max_weight_constraint:.0%} limit."
+            f"Weight constraint is binding for {', '.join(capped_assets)} at the {max_weight_constraint:.0%} maximum allocation."
         )
 
     return bullets[:5]

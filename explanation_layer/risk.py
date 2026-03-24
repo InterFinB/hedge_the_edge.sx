@@ -12,10 +12,14 @@ def generate_risk_commentary(weights, risk_contributions):
 
     if top_risk_assets:
         top_risk_text = ", ".join(asset for asset, _ in top_risk_assets)
-        bullets.append(f"Most portfolio risk comes from {top_risk_text}.")
+        bullets.append(
+            f"The largest contributors to portfolio volatility are {top_risk_text}."
+        )
 
     if negative_risk_assets:
         preview = ", ".join(negative_risk_assets[:2])
-        bullets.append(f"{preview} helps offset some of the total portfolio risk.")
+        bullets.append(
+            f"{preview} currently provides negative risk contribution and helps offset total portfolio volatility."
+        )
 
     return bullets[:3]

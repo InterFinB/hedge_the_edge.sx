@@ -1,1 +1,1 @@
-from .assembler import generate_explanation_bullets
+from .assembler import generate_explanation

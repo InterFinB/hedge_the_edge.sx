@@ -1,4 +1,13 @@
-from .utils import classify_concentration, classify_diversification, get_top_positive_risk_contributors
+from .utils import (
+    classify_concentration,
+    classify_diversification,
+    get_top_positive_risk_contributors,
+)
+from portfolio_engine.recompute_schedule import get_recompute_schedule
+
+
+def format_pct(value):
+    return f"{value * 100:.1f}%"
 
 
 def generate_takeaways(
@@ -6,6 +15,8 @@ def generate_takeaways(
     diversification_ratio,
     risk_contributions,
     simulation_loss_probability=None,
+    portfolio_volatility=None,
+    desired_return=None,
 ):
     bullets = []
 
@@ -14,26 +25,33 @@ def generate_takeaways(
     top_risk = get_top_positive_risk_contributors(risk_contributions, top_n=1)
 
     if div_level == "strong":
-        bullets.append("Diversification is strong overall.")
+        bullets.append("Diversification is strong at the portfolio level.")
     elif div_level == "moderate":
-        bullets.append("Diversification is decent, but not especially strong.")
+        bullets.append("Diversification is moderate.")
     else:
         bullets.append("Diversification is limited.")
 
     if conc_level == "high":
-        bullets.append("The portfolio is fairly concentrated.")
+        bullets.append("Concentration is elevated.")
     elif conc_level == "moderate":
-        bullets.append("The portfolio still leans on a few larger positions.")
+        bullets.append("Concentration is noticeable but not extreme.")
     else:
-        bullets.append("No small group of holdings dominates the portfolio.")
+        bullets.append("Concentration is low.")
+
+    if portfolio_volatility is not None and desired_return is not None:
+        schedule = get_recompute_schedule(portfolio_volatility)
+        bullets.append(
+            f"To maintain the target return of {format_pct(desired_return)} on a minimum-risk basis, "
+            f"the portfolio should be recomputed every {schedule.interval_label}."
+        )
 
     if top_risk:
-        bullets.append(f"The biggest risk driver is {top_risk[0][0]}.")
+        bullets.append(f"The main risk contribution comes from {top_risk[0][0]}.")
 
     if simulation_loss_probability is not None:
         if simulation_loss_probability > 0.25:
-            bullets.append("Modeled downside risk is meaningful.")
+            bullets.append("Modeled downside risk is materially elevated.")
         elif simulation_loss_probability < 0.10:
-            bullets.append("Modeled downside risk looks relatively contained.")
+            bullets.append("Modeled downside risk is relatively contained.")
 
-    return bullets[:3]
+    return bullets[:4]

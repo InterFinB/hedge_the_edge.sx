@@ -25,9 +25,13 @@ from portfolio_engine.simulation import (
     summarize_simulation_results,
     prepare_simulation_chart_data,
 )
-from explanation_layer import generate_explanation_bullets
+from portfolio_engine.recompute_schedule import get_recompute_schedule
+from explanation_layer import generate_explanation
 
 app = FastAPI(title="RM Agent API")
+
+DISPLAY_WEIGHT_THRESHOLD = 0.005  # 0.5%
+MEANINGFUL_WEIGHT_THRESHOLD = 0.005  # 0.5%
 
 
 class PortfolioRequest(BaseModel):
@@ -64,13 +68,8 @@ def generate_portfolio(request: PortfolioRequest):
         target_return = float(parse_percentage_input(request.target_return))
 
         max_volatility = None
-        if (
-            request.max_volatility is not None
-            and request.max_volatility.strip() != ""
-        ):
-            max_volatility = float(
-                parse_percentage_input(request.max_volatility)
-            )
+        if request.max_volatility is not None and request.max_volatility.strip() != "":
+            max_volatility = float(parse_percentage_input(request.max_volatility))
 
         price_data = load_price_data()
 
@@ -80,36 +79,39 @@ def generate_portfolio(request: PortfolioRequest):
             max_volatility=max_volatility,
         )
 
-        portfolio_volatility = float(
-            compute_portfolio_volatility(weights, price_data)
-        )
-        portfolio_return = float(
-            compute_portfolio_return(weights, price_data)
-        )
+        portfolio_volatility = float(compute_portfolio_volatility(weights, price_data))
+        portfolio_return = float(compute_portfolio_return(weights, price_data))
+        recompute_schedule = get_recompute_schedule(portfolio_volatility)
 
         raw_weights = {k: float(v) for k, v in dict(weights).items()}
+
+        active_positions = sum(1 for v in raw_weights.values() if v > 1e-6)
+        meaningful_positions = sum(
+            1 for v in raw_weights.values() if v >= MEANINGFUL_WEIGHT_THRESHOLD
+        )
+        largest_weight = max(raw_weights.values()) if raw_weights else 0.0
 
         chart_weights = {
             k: float(v)
             for k, v in raw_weights.items()
-            if v > 0.001
+            if v > DISPLAY_WEIGHT_THRESHOLD
         }
 
-        clean_weights = {
-            k: f"{round(v * 100, 2)}%"
+        weights_percent = {
+            k: round(v * 100, 4)
             for k, v in chart_weights.items()
         }
 
         risk_contributions = compute_risk_contributions(raw_weights, price_data)
         total_absolute_risk = sum(abs(v) for v in risk_contributions.values())
 
-        clean_risk_contributions = {}
+        risk_contributions_percent = {}
         risk_effects = {}
         chart_risk_contributions = {}
 
         if total_absolute_risk != 0:
             for k, v in risk_contributions.items():
-                if raw_weights.get(k, 0) <= 0.001:
+                if raw_weights.get(k, 0) <= DISPLAY_WEIGHT_THRESHOLD:
                     continue
 
                 percent = (abs(v) / total_absolute_risk) * 100
@@ -120,14 +122,12 @@ def generate_portfolio(request: PortfolioRequest):
                 else:
                     effect = "risk-increasing"
 
-                clean_risk_contributions[k] = f"{round(percent, 2)}%"
+                risk_contributions_percent[k] = round(percent, 4)
                 risk_effects[k] = effect
                 chart_risk_contributions[k] = round(percent, 4)
 
         concentration = float(compute_concentration(raw_weights))
-        diversification_ratio = float(
-            compute_diversification_ratio(raw_weights, price_data)
-        )
+        diversification_ratio = float(compute_diversification_ratio(raw_weights, price_data))
 
         simulated_returns = simulate_portfolio_annual_returns(
             weights=raw_weights,
@@ -159,8 +159,12 @@ def generate_portfolio(request: PortfolioRequest):
             "desired_return": f"{target_return:.2%}",
             "expected_portfolio_return": f"{portfolio_return:.2%}",
             "portfolio_volatility": f"{portfolio_volatility:.2%}",
-            "weights_percent": clean_weights,
-            "risk_contributions": clean_risk_contributions,
+            "recompute_interval": recompute_schedule.interval_label,
+            "active_positions": active_positions,
+            "meaningful_positions": meaningful_positions,
+            "largest_weight": f"{largest_weight:.2%}",
+            "weights_percent": weights_percent,
+            "risk_contributions": risk_contributions_percent,
             "risk_effects": risk_effects,
             "diversification_ratio": round(diversification_ratio, 3),
             "diversification_level": diversification_level,
@@ -191,11 +195,9 @@ def generate_portfolio(request: PortfolioRequest):
                 else "The portfolio is slightly above the requested volatility limit due to solver tolerance."
             )
         else:
-            response["message"] = (
-                "Minimum-risk portfolio for the requested return."
-            )
+            response["message"] = "Minimum-risk portfolio for the requested return."
 
-        explanation_bullets = generate_explanation_bullets(
+        explanation = generate_explanation(
             desired_return=target_return,
             expected_portfolio_return=portfolio_return,
             portfolio_volatility=portfolio_volatility,
@@ -204,6 +206,7 @@ def generate_portfolio(request: PortfolioRequest):
             diversification_ratio=diversification_ratio,
             concentration=concentration,
             feasible=feasible,
+            max_volatility=max_volatility,
             max_weight_constraint=0.35,
             simulation_mean_return=simulation_summary["mean_return"],
             simulation_median_return=simulation_summary["median_return"],
@@ -212,7 +215,7 @@ def generate_portfolio(request: PortfolioRequest):
             simulation_percentile_95=simulation_summary["percentile_95"],
         )
 
-        response["explanation_bullets"] = explanation_bullets
+        response["explanation"] = explanation
 
         return response
 

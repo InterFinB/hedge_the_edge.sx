@@ -6,7 +6,7 @@ from .takeaways import generate_takeaways
 from .vocabulary import generate_vocabulary
 
 
-def generate_explanation_bullets(
+def generate_explanation(
     desired_return,
     expected_portfolio_return,
     portfolio_volatility,
@@ -15,6 +15,7 @@ def generate_explanation_bullets(
     diversification_ratio,
     concentration,
     feasible=None,
+    max_volatility=None,
     max_weight_constraint=0.35,
     simulation_mean_return=None,
     simulation_median_return=None,
@@ -22,9 +23,12 @@ def generate_explanation_bullets(
     simulation_percentile_5=None,
     simulation_percentile_95=None,
 ):
-    sections = []
 
-    summary = generate_portfolio_summary(
+    # -----------------------------
+    # Portfolio summary
+    # -----------------------------
+
+    portfolio_summary = generate_portfolio_summary(
         desired_return=desired_return,
         expected_portfolio_return=expected_portfolio_return,
         portfolio_volatility=portfolio_volatility,
@@ -34,12 +38,20 @@ def generate_explanation_bullets(
         max_weight_constraint=max_weight_constraint,
     )
 
-    risk = generate_risk_commentary(
+    # -----------------------------
+    # Risk commentary
+    # -----------------------------
+
+    risk_commentary = generate_risk_commentary(
         weights=weights,
         risk_contributions=risk_contributions,
     )
 
-    simulation = generate_simulation_commentary(
+    # -----------------------------
+    # Simulation commentary
+    # -----------------------------
+
+    simulation_commentary = generate_simulation_commentary(
         feasible=feasible,
         simulation_mean_return=simulation_mean_return,
         simulation_median_return=simulation_median_return,
@@ -48,51 +60,101 @@ def generate_explanation_bullets(
         simulation_percentile_95=simulation_percentile_95,
     )
 
+    # -----------------------------
+    # Watch For
+    # -----------------------------
+
     watch_for = generate_watch_for(
         weights=weights,
         risk_contributions=risk_contributions,
+        concentration=concentration,
+        diversification_ratio=diversification_ratio,
+        portfolio_volatility=portfolio_volatility,
+        expected_portfolio_return=expected_portfolio_return,
+        simulation_loss_probability=simulation_loss_probability,
+        simulation_percentile_5=simulation_percentile_5,
+        simulation_percentile_95=simulation_percentile_95,
+        max_volatility=max_volatility,
         max_weight_constraint=max_weight_constraint,
     )
+
+    # -----------------------------
+    # Takeaways
+    # -----------------------------
 
     takeaways = generate_takeaways(
         concentration=concentration,
         diversification_ratio=diversification_ratio,
         risk_contributions=risk_contributions,
         simulation_loss_probability=simulation_loss_probability,
+        portfolio_volatility=portfolio_volatility,
+        desired_return=desired_return,
     )
 
+    # -----------------------------
+    # Vocabulary detection
+    # -----------------------------
+
     used_terms = set()
-    if summary or risk or simulation or watch_for or takeaways:
-        used_terms.update(["Risk", "Diversification", "Concentration", "Risk contribution"])
-    if simulation:
-        used_terms.add("Modeled range of outcomes")
+
+    if portfolio_summary:
+        used_terms.update({
+            "Expected return",
+            "Volatility",
+            "Allocation",
+            "Diversification",
+            "Diversification ratio",
+            "Concentration",
+        })
+
+    if risk_commentary or watch_for:
+        used_terms.update({
+            "Risk contribution",
+            "Correlation",
+        })
+
+    if simulation_commentary:
+        used_terms.update({
+            "Monte Carlo simulation",
+            "Modeled range of outcomes",
+            "Dispersion",
+            "Loss probability",
+            "Percentile",
+        })
+
     if feasible is not None:
         used_terms.add("Downside limit")
 
-    vocabulary = generate_vocabulary(sorted(used_terms))
+    if any(
+        "constraint" in bullet.lower()
+        for bullet in (
+            portfolio_summary
+            + risk_commentary
+            + watch_for
+        )
+    ):
+        used_terms.update({
+            "Weight constraint",
+            "Constraint",
+        })
 
-    if summary:
-        sections.append("Portfolio Summary")
-        sections.extend(summary)
+    # -----------------------------
+    # Vocabulary
+    # -----------------------------
 
-    if risk:
-        sections.append("Risk Commentary")
-        sections.extend(risk)
+    vocabulary = generate_vocabulary(
+        sorted(used_terms)
+    )
 
-    if simulation:
-        sections.append("Simulation Commentary")
-        sections.extend(simulation)
+    # -----------------------------
+    # Final structure
+    # -----------------------------
 
-    if watch_for:
-        sections.append("Watch For")
-        sections.extend(watch_for)
-
-    if takeaways:
-        sections.append("Takeaways")
-        sections.extend(takeaways)
-
-    if vocabulary:
-        sections.append("Vocabulary")
-        sections.extend(vocabulary)
-
-    return sections
+    return {
+        "portfolio_summary": portfolio_summary,
+        "risk_commentary": risk_commentary,
+        "simulation_commentary": simulation_commentary,
+        "watch_for": watch_for,
+        "takeaways": takeaways,
+        "vocabulary": vocabulary,
+    }

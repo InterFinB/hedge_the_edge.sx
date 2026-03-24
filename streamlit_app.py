@@ -233,11 +233,17 @@ def render_status_banner(data: dict):
 def render_summary_metrics(data: dict):
     st.subheader("Portfolio Snapshot")
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Target Return", data.get("desired_return", "-"))
     col2.metric("Expected Return", data.get("expected_portfolio_return", "-"))
     col3.metric("Risk (Vol)", data.get("portfolio_volatility", "-"))
     col4.metric("Diversification", str(data.get("diversification_level", "-")).title())
+    col5.metric("Recompute In", data.get("recompute_interval", "-"))
+
+    col6, col7, col8 = st.columns(3)
+    col6.metric("Active Positions", data.get("active_positions", "-"))
+    col7.metric("Meaningful Positions", data.get("meaningful_positions", "-"))
+    col8.metric("Largest Weight", data.get("largest_weight", "-"))
 
     if "max_allowed_volatility" in data:
         st.caption(f"Maximum allowed volatility: {data['max_allowed_volatility']}")
@@ -368,8 +374,8 @@ def render_simulation_summary(data: dict):
         col1.metric("Mean", simulation.get("mean_return", "-"))
         col2.metric("Median", simulation.get("median_return", "-"))
         col3.metric("Loss Chance", simulation.get("loss_probability", "-"))
-        col4.metric("5th %ile", simulation.get("percentile_5", "-"))
-        col5.metric("95th %ile", simulation.get("percentile_95", "-"))
+        col4.metric("5th Percentile", simulation.get("percentile_5", "-"))
+        col5.metric("95th Percentile", simulation.get("percentile_95", "-"))
 
         st.caption("These simulated outcomes are model-based scenarios, not forecasts.")
 
@@ -403,54 +409,30 @@ def render_simulation_distribution_chart(simulation_df: pd.DataFrame):
 
         st.plotly_chart(fig, use_container_width=True)
 
-    render_card("Simulated Return Distribution", content)
-
-
-def split_explanation_sections(bullets):
-    sections = {}
-    current_section = None
-
-    known_headers = {
-        "Portfolio Summary",
-        "Risk Commentary",
-        "Simulation Commentary",
-        "Watch For",
-        "Takeaways",
-        "Vocabulary",
-    }
-
-    for item in bullets:
-        if item in known_headers:
-            current_section = item
-            sections[current_section] = []
-        elif current_section:
-            sections[current_section].append(item)
-
-    return sections
+    render_card("Simulated Return Distribution (Monte Carlo Simulation)", content)
 
 
 def render_explanation(data: dict):
-    bullets = data.get("explanation_bullets", [])
-    if not bullets:
+
+    explanation = data.get("explanation", {})
+    if not explanation:
         return
 
-    sections = split_explanation_sections(bullets)
-    if not sections:
-        return
+    # =========================
+    # Explanation section
+    # =========================
 
+    st.divider()
     st.subheader("Explanation")
 
-    preferred_order = [
-        "Portfolio Summary",
-        "Risk Commentary",
-        "Simulation Commentary",
-        "Watch For",
-        "Takeaways",
-        "Vocabulary",
+    section_map = [
+        ("📊 Portfolio Summary", explanation.get("portfolio_summary", [])),
+        ("⚠️ Risk Commentary", explanation.get("risk_commentary", [])),
+        ("🎲 Simulation Commentary", explanation.get("simulation_commentary", [])),
     ]
 
-    for section_name in preferred_order:
-        items = sections.get(section_name, [])
+    for section_name, items in section_map:
+
         if not items:
             continue
 
@@ -458,10 +440,68 @@ def render_explanation(data: dict):
             for bullet in section_items:
                 st.markdown(
                     f"<div class='bullet-item'>• {bullet}</div>",
-                    unsafe_allow_html=True
+                    unsafe_allow_html=True,
                 )
 
         render_card(section_name, content)
+
+    # =========================
+    # Watch For
+    # =========================
+
+    watch_for = explanation.get("watch_for", [])
+
+    if watch_for:
+
+        st.divider()
+        st.subheader("👀 Watch For")
+
+        def content():
+            for bullet in watch_for:
+                st.markdown(
+                    f"<div class='bullet-item'>• {bullet}</div>",
+                    unsafe_allow_html=True,
+                )
+
+        render_card("Portfolio Monitoring", content)
+
+    # =========================
+    # Takeaways (separate section)
+    # =========================
+
+    takeaways = explanation.get("takeaways", [])
+
+    if takeaways:
+
+        st.divider()
+        st.subheader("✅ Takeaways")
+
+        def content():
+            for bullet in takeaways:
+                st.markdown(
+                    f"<div class='bullet-item'>• {bullet}</div>",
+                    unsafe_allow_html=True,
+                )
+
+        render_card("Key Points", content)
+
+    # =========================
+    # Vocabulary
+    # =========================
+
+    vocab = explanation.get("vocabulary", [])
+
+    if vocab:
+
+        st.divider()
+
+        with st.expander("📚 Vocabulary"):
+
+            for item in vocab:
+                st.markdown(
+                    f"<div class='bullet-item'>• {item}</div>",
+                    unsafe_allow_html=True,
+                )
 
 
 with st.form("portfolio_form"):
