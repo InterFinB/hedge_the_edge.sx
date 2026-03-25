@@ -218,3 +218,29 @@ CATEGORY_BASELINE_RETURNS = {
 
 # Optimizer configuration
 OPTIMIZER_REGULARIZATION_STRENGTH = 0.07
+
+# Per-asset weight bounds
+MIN_WEIGHT_BOUND = 0.00
+MAX_WEIGHT_BOUND = 0.35
+
+# Total equity-style exposure cap
+# Includes:
+# - individual stock categories
+# - broad market ETFs
+# - sector ETFs
+# - international ETFs
+MAX_STOCK_CATEGORY_WEIGHT = 0.95
+
+STOCK_CATEGORIES = {
+    "Technology Stocks",
+    "Health Care Stocks",
+    "Financial Stocks",
+    "Industrial Stocks",
+    "Consumer Discretionary Stocks",
+    "Consumer Staples Stocks",
+    "Energy Stocks",
+    "Materials Stocks",
+    "Utilities Stocks",
+    "Real Estate Stocks",
+    "Communication Services Stocks",
+}

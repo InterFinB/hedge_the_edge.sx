@@ -8,8 +8,12 @@ import traceback
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from portfolio_engine import data_loader
-from portfolio_engine.data_loader import load_price_data
-from portfolio_engine.optimizer import optimize_portfolio
+from portfolio_engine.data_loader import load_market_state
+from portfolio_engine.optimizer import (
+    optimize_portfolio,
+    compute_max_feasible_return,
+    optimize_min_variance_portfolio,
+)
 from portfolio_engine.risk import (
     compute_portfolio_volatility,
     compute_portfolio_return,
@@ -30,13 +34,41 @@ from explanation_layer import generate_explanation
 
 app = FastAPI(title="RM Agent API")
 
-DISPLAY_WEIGHT_THRESHOLD = 0.005  # 0.5%
-MEANINGFUL_WEIGHT_THRESHOLD = 0.005  # 0.5%
+DISPLAY_WEIGHT_THRESHOLD = 0.008
+MEANINGFUL_WEIGHT_THRESHOLD = 0.008
+MIN_PORTFOLIO_WEIGHT = 0.008
+MAX_FINAL_HOLDINGS = 17
 
 
 class PortfolioRequest(BaseModel):
     target_return: str
     max_volatility: Optional[str] = None
+
+
+def prune_and_renormalize_weights(
+    weights: dict,
+    min_weight: float = MIN_PORTFOLIO_WEIGHT,
+) -> dict:
+    pruned = {
+        k: float(v)
+        for k, v in weights.items()
+        if float(v) >= min_weight
+    }
+
+    total = sum(pruned.values())
+
+    if total <= 0:
+        raise ValueError("All portfolio weights were removed by the minimum weight threshold.")
+
+    return {
+        k: float(v) / total
+        for k, v in pruned.items()
+    }
+
+
+def select_top_holdings(weights: dict, max_holdings: int = MAX_FINAL_HOLDINGS) -> list[str]:
+    ranked = sorted(weights.items(), key=lambda x: x[1], reverse=True)
+    return [ticker for ticker, _ in ranked[:max_holdings]]
 
 
 @app.get("/")
@@ -52,13 +84,48 @@ def cache_status():
     }
 
 
+@app.get("/return-range")
+def get_return_range():
+    try:
+        market_state = load_market_state(force_refresh=False)
+        price_data = market_state["price_data"]
+        expected_returns = market_state["expected_returns"]
+        cov_matrix = market_state["cov_matrix"]
+
+        min_var_weights = optimize_min_variance_portfolio(
+            price_data=price_data,
+            expected_returns=expected_returns,
+            cov_matrix=cov_matrix,
+        )
+
+        min_feasible_return = compute_portfolio_return(min_var_weights, expected_returns)
+        max_feasible_return = compute_max_feasible_return(expected_returns)
+
+        return {
+            "min_feasible_return": f"{min_feasible_return:.2%}",
+            "max_feasible_return": f"{max_feasible_return:.2%}",
+            "min_feasible_return_raw": float(min_feasible_return),
+            "max_feasible_return_raw": float(max_feasible_return),
+        }
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected server error: {str(e)}",
+        )
+
+
 @app.post("/refresh-data")
 def refresh_data():
-    price_data = load_price_data(force_refresh=True)
+    market_state = load_market_state(force_refresh=True)
+    price_data = market_state["price_data"]
+
     return {
         "message": "Market data cache refreshed successfully.",
         "rows": len(price_data),
         "columns": len(price_data.columns),
+        "cache_timestamp": str(market_state["cache_timestamp"]),
     }
 
 
@@ -71,21 +138,59 @@ def generate_portfolio(request: PortfolioRequest):
         if request.max_volatility is not None and request.max_volatility.strip() != "":
             max_volatility = float(parse_percentage_input(request.max_volatility))
 
-        price_data = load_price_data()
+        market_state = load_market_state(force_refresh=False)
+        price_data = market_state["price_data"]
+        expected_returns = market_state["expected_returns"]
+        cov_matrix = market_state["cov_matrix"]
 
-        weights = optimize_portfolio(
+        initial_weights = optimize_portfolio(
             target_return=target_return,
             price_data=price_data,
             max_volatility=max_volatility,
+            expected_returns=expected_returns,
+            cov_matrix=cov_matrix,
         )
 
-        portfolio_volatility = float(compute_portfolio_volatility(weights, price_data))
-        portfolio_return = float(compute_portfolio_return(weights, price_data))
+        initial_weights = {
+            k: float(v)
+            for k, v in dict(initial_weights).items()
+        }
+
+        pruned_weights = prune_and_renormalize_weights(
+            initial_weights,
+            MIN_PORTFOLIO_WEIGHT,
+        )
+
+        final_weights = pruned_weights
+
+        if len(pruned_weights) > MAX_FINAL_HOLDINGS:
+            reduced_assets = select_top_holdings(pruned_weights, MAX_FINAL_HOLDINGS)
+
+            try:
+                reduced_weights = optimize_portfolio(
+                    target_return=target_return,
+                    price_data=price_data,
+                    max_volatility=max_volatility,
+                    expected_returns=expected_returns.loc[reduced_assets],
+                    cov_matrix=cov_matrix.loc[reduced_assets, reduced_assets],
+                    asset_subset=reduced_assets,
+                )
+
+                final_weights = prune_and_renormalize_weights(
+                    reduced_weights,
+                    MIN_PORTFOLIO_WEIGHT,
+                )
+
+            except Exception:
+                final_weights = pruned_weights
+
+        raw_weights = final_weights
+
+        portfolio_volatility = float(compute_portfolio_volatility(raw_weights, cov_matrix))
+        portfolio_return = float(compute_portfolio_return(raw_weights, expected_returns))
         recompute_schedule = get_recompute_schedule(portfolio_volatility)
 
-        raw_weights = {k: float(v) for k, v in dict(weights).items()}
-
-        active_positions = sum(1 for v in raw_weights.values() if v > 1e-6)
+        active_positions = len(raw_weights)
         meaningful_positions = sum(
             1 for v in raw_weights.values() if v >= MEANINGFUL_WEIGHT_THRESHOLD
         )
@@ -94,7 +199,7 @@ def generate_portfolio(request: PortfolioRequest):
         chart_weights = {
             k: float(v)
             for k, v in raw_weights.items()
-            if v > DISPLAY_WEIGHT_THRESHOLD
+            if v >= DISPLAY_WEIGHT_THRESHOLD
         }
 
         weights_percent = {
@@ -102,7 +207,7 @@ def generate_portfolio(request: PortfolioRequest):
             for k, v in chart_weights.items()
         }
 
-        risk_contributions = compute_risk_contributions(raw_weights, price_data)
+        risk_contributions = compute_risk_contributions(raw_weights, cov_matrix)
         total_absolute_risk = sum(abs(v) for v in risk_contributions.values())
 
         risk_contributions_percent = {}
@@ -111,28 +216,27 @@ def generate_portfolio(request: PortfolioRequest):
 
         if total_absolute_risk != 0:
             for k, v in risk_contributions.items():
-                if raw_weights.get(k, 0) <= DISPLAY_WEIGHT_THRESHOLD:
+                if raw_weights.get(k, 0) < DISPLAY_WEIGHT_THRESHOLD:
                     continue
 
                 percent = (abs(v) / total_absolute_risk) * 100
+                effect = "risk-reducing" if v < 0 else "risk-increasing"
 
                 if v < 0:
                     percent = -percent
-                    effect = "risk-reducing"
-                else:
-                    effect = "risk-increasing"
 
                 risk_contributions_percent[k] = round(percent, 4)
                 risk_effects[k] = effect
                 chart_risk_contributions[k] = round(percent, 4)
 
         concentration = float(compute_concentration(raw_weights))
-        diversification_ratio = float(compute_diversification_ratio(raw_weights, price_data))
+        diversification_ratio = float(compute_diversification_ratio(raw_weights, cov_matrix))
 
         simulated_returns = simulate_portfolio_annual_returns(
             weights=raw_weights,
-            price_data=price_data,
-            n_simulations=5000,
+            expected_returns=expected_returns,
+            cov_matrix=cov_matrix,
+            n_simulations=1000,
             random_seed=42,
         )
 
@@ -216,26 +320,13 @@ def generate_portfolio(request: PortfolioRequest):
         )
 
         response["explanation"] = explanation
-
         return response
 
     except ValueError as e:
-        error_message = str(e).lower()
-
-        if "maximum feasible return" in error_message:
-            raise HTTPException(
-                status_code=400,
-                detail=str(e),
-            )
-
-        raise HTTPException(
-            status_code=400,
-            detail=str(e),
-        )
+        raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
         traceback.print_exc()
-
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected server error: {str(e)}",

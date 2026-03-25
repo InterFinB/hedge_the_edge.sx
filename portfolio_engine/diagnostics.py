@@ -1,14 +1,11 @@
 import numpy as np
-from portfolio_engine.covariance import compute_covariance_matrix
 
 
-def compute_risk_contributions(weights, price_data):
+def compute_risk_contributions(weights, cov_matrix):
     """
     Compute each asset's contribution to portfolio volatility.
     Returns a dictionary {asset: contribution}.
     """
-    cov_matrix = compute_covariance_matrix(price_data)
-
     assets = list(weights.keys())
     w = np.array(list(weights.values()), dtype=float)
     cov = cov_matrix.loc[assets, assets].values
@@ -34,13 +31,11 @@ def compute_concentration(weights):
     return float(np.sum(w ** 2))
 
 
-def compute_diversification_ratio(weights, price_data):
+def compute_diversification_ratio(weights, cov_matrix):
     """
     Diversification ratio:
     weighted average asset volatility / portfolio volatility
     """
-    cov_matrix = compute_covariance_matrix(price_data)
-
     assets = list(weights.keys())
     w = np.array(list(weights.values()), dtype=float)
     cov = cov_matrix.loc[assets, assets].values

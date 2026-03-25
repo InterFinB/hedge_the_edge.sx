@@ -1,14 +1,12 @@
 import numpy as np
 import pandas as pd
 
-from portfolio_engine.returns import compute_expected_returns
-from portfolio_engine.covariance import compute_covariance_matrix
-
 
 def simulate_portfolio_annual_returns(
     weights: dict,
-    price_data: pd.DataFrame,
-    n_simulations: int = 5000,
+    expected_returns: pd.Series,
+    cov_matrix: pd.DataFrame,
+    n_simulations: int = 2000,
     random_seed: int = 42,
 ) -> np.ndarray:
     """
@@ -24,27 +22,24 @@ def simulate_portfolio_annual_returns(
 
     weight_series = pd.Series(weights, dtype=float)
 
-    expected_returns = compute_expected_returns(price_data)
-    covariance_matrix = compute_covariance_matrix(price_data)
-
     aligned_assets = [
         asset
         for asset in weight_series.index
-        if asset in expected_returns.index and asset in covariance_matrix.index
+        if asset in expected_returns.index and asset in cov_matrix.index
     ]
 
     if not aligned_assets:
-        raise ValueError("No overlapping assets found between weights and market data.")
+        raise ValueError("No overlapping assets found between weights and model inputs.")
 
     weight_vector = weight_series.loc[aligned_assets].values
     mu_vector = expected_returns.loc[aligned_assets].values
-    cov_matrix = covariance_matrix.loc[aligned_assets, aligned_assets].values
+    cov_values = cov_matrix.loc[aligned_assets, aligned_assets].values
 
     rng = np.random.default_rng(random_seed)
 
     simulated_asset_returns = rng.multivariate_normal(
         mean=mu_vector,
-        cov=cov_matrix,
+        cov=cov_values,
         size=n_simulations,
     )
 

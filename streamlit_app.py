@@ -1,3 +1,4 @@
+import random
 import streamlit as st
 import requests
 import pandas as pd
@@ -6,6 +7,21 @@ import plotly.express as px
 from portfolio_engine.config import TICKER_TO_NAME, TICKER_TO_CATEGORY
 
 API_URL = "http://127.0.0.1:8000/portfolio"
+
+INVESTING_FACTS = [
+    "📌 Diversification helps reduce concentration risk, but it does not eliminate market risk.",
+    "📌 A portfolio can be low-volatility and still fail to meet a return target.",
+    "📌 Correlation matters as much as asset quality when building a diversified portfolio.",
+    "📌 Higher expected return usually requires accepting more concentration, more volatility, or both.",
+    "📌 A minimum-risk portfolio is not the same as a maximum-return portfolio.",
+    "📌 Small changes in constraints can materially change the optimizer's allocation.",
+    "📌 Volatility measures fluctuation, while risk is broader and includes failure to reach the objective.",
+    "📌 A portfolio with many holdings is not automatically well diversified if the holdings behave similarly.",
+    "📌 Rebalancing discipline matters because portfolio weights drift as prices move.",
+    "📌 Monte Carlo simulations are scenario tools, not forecasts of what will happen.",
+    "📌 A portfolio near its feasible return ceiling usually becomes more concentrated.",
+    "📌 Risk contribution shows which holdings drive portfolio risk, not just which holdings have the biggest weights.",
+]
 
 st.set_page_config(page_title="Hedge The Edge", page_icon="📈", layout="wide")
 
@@ -38,6 +54,19 @@ st.markdown(
         margin-bottom: 0.4rem;
         color: #111827;
         line-height: 1.5;
+    }
+    .fact-box {
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 0.9rem 1rem;
+        margin: 0.7rem 0 0.9rem 0;
+        color: #111827;
+    }
+    .fact-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin-bottom: 0.3rem;
     }
     </style>
     """,
@@ -89,6 +118,19 @@ def render_card(title: str, render_fn):
         st.markdown("</div>", unsafe_allow_html=True)
 
 
+def render_loading_fact():
+    fact = random.choice(INVESTING_FACTS)
+    st.markdown(
+        f"""
+        <div class="fact-box">
+            <div class="fact-title">💡 While your portfolio is being built</div>
+            <div>{fact}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_weights_table(title: str, data: dict):
     def content():
         if not data:
@@ -106,7 +148,7 @@ def render_weights_table(title: str, data: dict):
 
         df = pd.DataFrame(rows)
         df = set_table_index_from_one(df)
-        st.dataframe(df, use_container_width=True, hide_index=False)
+        st.dataframe(df, width="stretch", hide_index=False)
 
     render_card(title, content)
 
@@ -129,7 +171,7 @@ def render_risk_contributions_table(title: str, contributions: dict, effects: di
 
         df = pd.DataFrame(rows)
         df = set_table_index_from_one(df)
-        st.dataframe(df, use_container_width=True, hide_index=False)
+        st.dataframe(df, width="stretch", hide_index=False)
 
     render_card(title, content)
 
@@ -144,7 +186,7 @@ def render_category_exposure_table(title: str, category_df: pd.DataFrame):
         df["Weight"] = df["Weight (%)"].map(lambda x: f"{x:.2f}%")
         df = df[["Category", "Weight"]]
         df = set_table_index_from_one(df)
-        st.dataframe(df, use_container_width=True, hide_index=False)
+        st.dataframe(df, width="stretch", hide_index=False)
 
     render_card(title, content)
 
@@ -279,7 +321,7 @@ def render_allocation_chart(weights_df: pd.DataFrame):
             legend_title_text="Assets",
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     render_card("Portfolio Allocation", content)
 
@@ -308,7 +350,7 @@ def render_category_exposure_chart(category_df: pd.DataFrame):
             legend_title_text="Categories",
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     render_card("Category Exposure", content)
 
@@ -346,7 +388,7 @@ def render_risk_chart(risk_df: pd.DataFrame):
             legend_title_text="Effect",
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     render_card("Risk Contribution by Asset", content)
 
@@ -407,20 +449,15 @@ def render_simulation_distribution_chart(simulation_df: pd.DataFrame):
             yaxis_title="Frequency",
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     render_card("Simulated Return Distribution (Monte Carlo Simulation)", content)
 
 
 def render_explanation(data: dict):
-
     explanation = data.get("explanation", {})
     if not explanation:
         return
-
-    # =========================
-    # Explanation section
-    # =========================
 
     st.divider()
     st.subheader("Explanation")
@@ -432,7 +469,6 @@ def render_explanation(data: dict):
     ]
 
     for section_name, items in section_map:
-
         if not items:
             continue
 
@@ -445,14 +481,9 @@ def render_explanation(data: dict):
 
         render_card(section_name, content)
 
-    # =========================
-    # Watch For
-    # =========================
-
     watch_for = explanation.get("watch_for", [])
 
     if watch_for:
-
         st.divider()
         st.subheader("👀 Watch For")
 
@@ -465,14 +496,9 @@ def render_explanation(data: dict):
 
         render_card("Portfolio Monitoring", content)
 
-    # =========================
-    # Takeaways (separate section)
-    # =========================
-
     takeaways = explanation.get("takeaways", [])
 
     if takeaways:
-
         st.divider()
         st.subheader("✅ Takeaways")
 
@@ -485,18 +511,12 @@ def render_explanation(data: dict):
 
         render_card("Key Points", content)
 
-    # =========================
-    # Vocabulary
-    # =========================
-
     vocab = explanation.get("vocabulary", [])
 
     if vocab:
-
         st.divider()
 
         with st.expander("📚 Vocabulary"):
-
             for item in vocab:
                 st.markdown(
                     f"<div class='bullet-item'>• {item}</div>",
@@ -532,8 +552,10 @@ if submitted:
             payload["max_volatility"] = max_volatility.strip()
 
         try:
+            render_loading_fact()
+
             with st.spinner("Generating portfolio..."):
-                response = requests.post(API_URL, json=payload, timeout=60)
+                response = requests.post(API_URL, json=payload, timeout=180)
 
             if response.status_code == 200:
                 data = response.json()
@@ -580,6 +602,8 @@ if submitted:
 - The portfolio is optimized to achieve the requested return with minimum modeled volatility.
 - The optimization is long-only.
 - The maximum asset weight constraint is 35%.
+- The final displayed portfolio excludes weights below 0.8%.
+- If too many holdings remain after pruning, the final portfolio is stabilized on a reduced set of top holdings.
 - Expected returns are based on historical estimates and clipped for realism.
 - Covariance estimation uses Ledoit-Wolf shrinkage.
 - Monte Carlo results are model-based simulations, not forecasts.

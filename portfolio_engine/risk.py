@@ -1,21 +1,29 @@
 import numpy as np
-from portfolio_engine.covariance import compute_covariance_matrix
-from portfolio_engine.returns import compute_expected_returns
 
 
-def compute_portfolio_volatility(weights, price_data):
-    cov_matrix = compute_covariance_matrix(price_data)
+def compute_portfolio_volatility(weights, cov_matrix):
+    """
+    Compute annualized portfolio volatility using a precomputed covariance matrix
+    and only the assets present in the supplied weights dictionary.
+    """
+    assets = list(weights.keys())
+    w = np.array([weights[a] for a in assets], dtype=float)
+    cov = cov_matrix.loc[assets, assets].values
 
-    w = np.array(list(weights.values()))
-    volatility = np.sqrt(w.T @ cov_matrix.values @ w)
+    volatility = np.sqrt(w.T @ cov @ w)
 
-    return volatility
+    return float(volatility)
 
 
-def compute_portfolio_return(weights, price_data):
-    mu = compute_expected_returns(price_data)
+def compute_portfolio_return(weights, expected_returns):
+    """
+    Compute expected portfolio return using a precomputed expected return vector
+    and only the assets present in the supplied weights dictionary.
+    """
+    assets = list(weights.keys())
+    w = np.array([weights[a] for a in assets], dtype=float)
+    mu_vector = expected_returns.loc[assets].values
 
-    w = np.array(list(weights.values()))
-    portfolio_return = w.T @ mu.values
+    portfolio_return = w.T @ mu_vector
 
-    return portfolio_return
+    return float(portfolio_return)
