@@ -13,8 +13,11 @@ from portfolio_engine.config import (
     STOCK_CATEGORIES,
 )
 
-
 WEIGHT_BOUNDS = (MIN_WEIGHT_BOUND, MAX_WEIGHT_BOUND)
+
+# Practical minimum meaningful portfolio weight:
+# assets below this threshold are pruned after optimization.
+MIN_MEANINGFUL_WEIGHT = 0.015
 
 
 def compute_max_feasible_return(
@@ -57,6 +60,118 @@ def compute_max_feasible_return(
     return float(max_return)
 
 
+def _solve_portfolio_problem(
+    mu: pd.Series,
+    cov: pd.DataFrame,
+    target_return: float | None = None,
+    max_volatility: float | None = None,
+) -> dict:
+    assets = list(mu.index)
+    n_assets = len(assets)
+
+    if n_assets < 2:
+        raise ValueError("Optimization universe must contain at least 2 assets.")
+
+    mu_vector = mu.values.astype(float)
+    cov_values = cov.values.astype(float)
+    cov_values = 0.5 * (cov_values + cov_values.T)
+
+    w = cp.Variable(n_assets)
+
+    portfolio_variance = cp.quad_form(w, cp.psd_wrap(cov_values))
+    regularization_penalty = cp.sum_squares(w)
+
+    constraints = [
+        cp.sum(w) == 1,
+        w >= WEIGHT_BOUNDS[0],
+        w <= WEIGHT_BOUNDS[1],
+    ]
+
+    if target_return is not None:
+        constraints.append(mu_vector @ w >= target_return)
+
+    stock_indices = [
+        i
+        for i, asset in enumerate(assets)
+        if TICKER_TO_CATEGORY.get(asset, "") in STOCK_CATEGORIES
+    ]
+
+    if stock_indices:
+        constraints.append(cp.sum(w[stock_indices]) <= MAX_STOCK_CATEGORY_WEIGHT)
+
+    if max_volatility is not None:
+        constraints.append(portfolio_variance <= max_volatility**2)
+
+    objective = cp.Minimize(
+        portfolio_variance + OPTIMIZER_REGULARIZATION_STRENGTH * regularization_penalty
+    )
+
+    problem = cp.Problem(objective, constraints)
+    problem.solve(solver=cp.SCS, verbose=False)
+
+    if w.value is None:
+        raise ValueError("Optimization failed under the current constraints.")
+
+    weights = np.array(w.value, dtype=float).flatten()
+    weights[np.abs(weights) < 1e-8] = 0.0
+
+    weight_sum = weights.sum()
+    if abs(weight_sum) > 1e-12:
+        weights = weights / weight_sum
+
+    return {
+        asset: float(weight)
+        for asset, weight in zip(assets, weights)
+    }
+
+
+def _prune_and_renormalize(
+    weights_dict: dict[str, float],
+    min_meaningful_weight: float = MIN_MEANINGFUL_WEIGHT,
+) -> dict[str, float]:
+    pruned = {
+        asset: weight
+        for asset, weight in weights_dict.items()
+        if weight >= min_meaningful_weight
+    }
+
+    if not pruned:
+        largest_asset = max(weights_dict, key=weights_dict.get)
+        pruned = {largest_asset: weights_dict[largest_asset]}
+
+    total = sum(pruned.values())
+    if total <= 1e-12:
+        raise ValueError("All portfolio weights were removed during pruning.")
+
+    normalized = {
+        asset: weight / total
+        for asset, weight in pruned.items()
+    }
+
+    return normalized
+
+
+def _round_weights(weights_dict: dict[str, float]) -> dict[str, float]:
+    return {
+        asset: round(float(weight), 8)
+        for asset, weight in weights_dict.items()
+    }
+
+
+def compute_max_feasible_return_for_subset(
+    mu: pd.Series,
+    assets: list[str],
+    max_weight: float = MAX_WEIGHT_BOUND,
+    max_stock_category_weight: float = MAX_STOCK_CATEGORY_WEIGHT,
+) -> float:
+    mu_subset = mu.loc[assets]
+    return compute_max_feasible_return(
+        mu=mu_subset,
+        max_weight=max_weight,
+        max_stock_category_weight=max_stock_category_weight,
+    )
+
+
 def optimize_min_variance_portfolio(
     price_data: pd.DataFrame,
     expected_returns: pd.Series | None = None,
@@ -87,50 +202,31 @@ def optimize_min_variance_portfolio(
     mu = mu.loc[assets]
     cov = cov.loc[assets, assets]
 
-    n_assets = len(assets)
-    cov_values = cov.values.astype(float)
-    cov_values = 0.5 * (cov_values + cov_values.T)
-
-    w = cp.Variable(n_assets)
-    portfolio_variance = cp.quad_form(w, cp.psd_wrap(cov_values))
-    regularization_penalty = cp.sum_squares(w)
-
-    constraints = [
-        cp.sum(w) == 1,
-        w >= WEIGHT_BOUNDS[0],
-        w <= WEIGHT_BOUNDS[1],
-    ]
-
-    stock_indices = [
-        i
-        for i, asset in enumerate(assets)
-        if TICKER_TO_CATEGORY.get(asset, "") in STOCK_CATEGORIES
-    ]
-
-    if stock_indices:
-        constraints.append(cp.sum(w[stock_indices]) <= MAX_STOCK_CATEGORY_WEIGHT)
-
-    objective = cp.Minimize(
-        portfolio_variance + OPTIMIZER_REGULARIZATION_STRENGTH * regularization_penalty
+    raw_weights = _solve_portfolio_problem(
+        mu=mu,
+        cov=cov,
+        target_return=None,
+        max_volatility=None,
     )
 
-    problem = cp.Problem(objective, constraints)
-    problem.solve(solver=cp.SCS, verbose=False)
+    pruned_weights = _prune_and_renormalize(raw_weights, MIN_MEANINGFUL_WEIGHT)
+    surviving_assets = list(pruned_weights.keys())
 
-    if w.value is None:
-        raise ValueError("Minimum-variance optimization failed.")
+    if len(surviving_assets) < 2:
+        return _round_weights(pruned_weights)
 
-    weights = np.array(w.value, dtype=float).flatten()
-    weights[np.abs(weights) < 1e-8] = 0.0
+    mu_refined = mu.loc[surviving_assets]
+    cov_refined = cov.loc[surviving_assets, surviving_assets]
 
-    weight_sum = weights.sum()
-    if abs(weight_sum) > 1e-12:
-        weights = weights / weight_sum
+    refined_weights = _solve_portfolio_problem(
+        mu=mu_refined,
+        cov=cov_refined,
+        target_return=None,
+        max_volatility=None,
+    )
 
-    return {
-        asset: round(float(weight), 8)
-        for asset, weight in zip(assets, weights)
-    }
+    refined_pruned = _prune_and_renormalize(refined_weights, MIN_MEANINGFUL_WEIGHT)
+    return _round_weights(refined_pruned)
 
 
 def optimize_portfolio(
@@ -165,8 +261,6 @@ def optimize_portfolio(
     mu = mu.loc[assets]
     cov = cov.loc[assets, assets]
 
-    n_assets = len(assets)
-
     max_feasible_return = compute_max_feasible_return(
         mu=mu,
         max_weight=WEIGHT_BOUNDS[1],
@@ -179,43 +273,14 @@ def optimize_portfolio(
             f"The maximum feasible return under the current constraints is {max_feasible_return:.2%}."
         )
 
-    mu_vector = mu.values.astype(float)
-    cov_values = cov.values.astype(float)
-    cov_values = 0.5 * (cov_values + cov_values.T)
-
-    w = cp.Variable(n_assets)
-
-    portfolio_variance = cp.quad_form(w, cp.psd_wrap(cov_values))
-    portfolio_return = mu_vector @ w
-    regularization_penalty = cp.sum_squares(w)
-
-    constraints = [
-        cp.sum(w) == 1,
-        w >= WEIGHT_BOUNDS[0],
-        w <= WEIGHT_BOUNDS[1],
-        portfolio_return >= target_return,
-    ]
-
-    stock_indices = [
-        i
-        for i, asset in enumerate(assets)
-        if TICKER_TO_CATEGORY.get(asset, "") in STOCK_CATEGORIES
-    ]
-
-    if stock_indices:
-        constraints.append(cp.sum(w[stock_indices]) <= MAX_STOCK_CATEGORY_WEIGHT)
-
-    if max_volatility is not None:
-        constraints.append(portfolio_variance <= max_volatility ** 2)
-
-    objective = cp.Minimize(
-        portfolio_variance + OPTIMIZER_REGULARIZATION_STRENGTH * regularization_penalty
-    )
-
-    problem = cp.Problem(objective, constraints)
-    problem.solve(solver=cp.SCS, verbose=False)
-
-    if w.value is None:
+    try:
+        raw_weights = _solve_portfolio_problem(
+            mu=mu,
+            cov=cov,
+            target_return=target_return,
+            max_volatility=max_volatility,
+        )
+    except ValueError:
         if max_volatility is not None:
             raise ValueError(
                 f"Target return {target_return:.2%} is not feasible under the requested "
@@ -223,14 +288,35 @@ def optimize_portfolio(
             )
         raise ValueError("Portfolio optimization failed under the current constraints.")
 
-    weights = np.array(w.value, dtype=float).flatten()
-    weights[np.abs(weights) < 1e-8] = 0.0
+    pruned_weights = _prune_and_renormalize(raw_weights, MIN_MEANINGFUL_WEIGHT)
+    surviving_assets = list(pruned_weights.keys())
 
-    weight_sum = weights.sum()
-    if abs(weight_sum) > 1e-12:
-        weights = weights / weight_sum
+    if len(surviving_assets) < 2:
+        return _round_weights(pruned_weights)
 
-    return {
-        asset: round(float(weight), 8)
-        for asset, weight in zip(assets, weights)
-    }
+    mu_refined = mu.loc[surviving_assets]
+    cov_refined = cov.loc[surviving_assets, surviving_assets]
+
+    refined_max_feasible_return = compute_max_feasible_return_for_subset(
+        mu=mu_refined,
+        assets=surviving_assets,
+        max_weight=WEIGHT_BOUNDS[1],
+        max_stock_category_weight=MAX_STOCK_CATEGORY_WEIGHT,
+    )
+
+    if target_return > refined_max_feasible_return:
+        return _round_weights(pruned_weights)
+
+    try:
+        refined_weights = _solve_portfolio_problem(
+            mu=mu_refined,
+            cov=cov_refined,
+            target_return=target_return,
+            max_volatility=max_volatility,
+        )
+
+        refined_pruned = _prune_and_renormalize(refined_weights, MIN_MEANINGFUL_WEIGHT)
+        return _round_weights(refined_pruned)
+
+    except ValueError:
+        return _round_weights(pruned_weights)

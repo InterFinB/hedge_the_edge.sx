@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
+from portfolio_engine.config import TICKER_TO_NAME
 import sys
 import os
 import traceback
@@ -181,6 +182,7 @@ def generate_portfolio(request: PortfolioRequest):
             "weights": weights,
             "weights_percent": weights_percent,
             "tickers": tickers,
+            "ticker_to_name": TICKER_TO_NAME,
             "chart_data": chart_data,
             "risk_effects": risk_effects,
             "risk_contributions": risk_contributions,

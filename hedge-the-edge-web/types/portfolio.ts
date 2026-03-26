@@ -24,19 +24,18 @@ export type ExplanationBlock =
       [key: string]: unknown;
     };
 
-export type ChartDatum =
-  | {
-      ticker?: string;
-      weight?: number;
-      name?: string;
-      value?: number;
-      bin?: number | string;
-      count?: number;
-      frequency?: number;
-      x?: number | string;
-      y?: number;
-      [key: string]: unknown;
-    };
+export type ChartDatum = {
+  ticker?: string;
+  weight?: number;
+  name?: string;
+  value?: number;
+  bin?: number | string;
+  count?: number;
+  frequency?: number;
+  x?: number | string;
+  y?: number;
+  [key: string]: unknown;
+};
 
 export type PortfolioResponse = {
   desired_return?: number;
@@ -49,6 +48,7 @@ export type PortfolioResponse = {
   weights: Record<string, number>;
   weights_percent?: Record<string, number>;
   tickers?: string[];
+  ticker_to_name?: Record<string, string>;
   chart_data?: ChartDatum[];
 
   risk_effects?: Record<string, number> | number[];
@@ -61,7 +61,7 @@ export type PortfolioResponse = {
   meaningful_positions?: string[];
   largest_weight?: number;
 
-  recompute_interval?: string | number;
+  recompute_interval?: string | number | { interval_label?: string };
   recompute_schedule?: string | number;
 
   simulation?: SimulationCompact;

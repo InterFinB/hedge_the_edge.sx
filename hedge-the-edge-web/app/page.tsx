@@ -6,8 +6,7 @@ import {
   PortfolioForm,
   LoadingFacts,
   StatusBanner,
-  PortfolioSummary,
-  PortfolioSnapshot,
+  PortfolioOverview,
   AllocationChart,
   CategoryExposureChart,
   RiskContributionChart,
@@ -97,75 +96,94 @@ export default function Home() {
   const desiredReturn = result?.desired_return ?? result?.target_return;
 
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-900">
-      <div className="mx-auto max-w-[1200px] space-y-8 px-6 py-12">
-        <header className="mb-8 space-y-3">
-          <h1 className="text-5xl font-semibold tracking-tight text-slate-900">
-            Hedge the Edge
-          </h1>
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#f8fafc_0%,#eef2f7_45%,#e5ebf3_100%)] text-slate-900">
+      <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
+        <header className="mb-6">
+          <div className="rounded-[28px] border border-white/70 bg-white/80 px-6 py-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] backdrop-blur">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                  Portfolio intelligence
+                </p>
+                <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+                  Hedge the Edge
+                </h1>
+                <p className="max-w-3xl text-sm leading-6 text-slate-600 sm:text-[15px]">
+                  Generate a minimum-risk portfolio for a target return and review
+                  allocation, diagnostics, simulation, and explanation in one place.
+                </p>
+              </div>
 
-          <p className="max-w-3xl text-lg leading-relaxed text-slate-600">
-            Generate a minimum-risk portfolio for a target return and review
-            allocation, diagnostics, simulation, and explanation in one place.
-          </p>
+              <div className="inline-flex items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                <span className="mr-2 h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="font-medium text-slate-900">Dashboard mode:</span>
+                <span className="ml-1">compact</span>
+              </div>
+            </div>
+          </div>
         </header>
 
-        <PortfolioForm
-          targetReturnInput={targetReturnInput}
-          setTargetReturnInput={setTargetReturnInput}
-          maxVolatilityInput={maxVolatilityInput}
-          setMaxVolatilityInput={setMaxVolatilityInput}
-          loading={loading}
-          error={error}
-          onSubmit={generate}
-        />
+        <div className="space-y-4">
+          <PortfolioForm
+            targetReturnInput={targetReturnInput}
+            setTargetReturnInput={setTargetReturnInput}
+            maxVolatilityInput={maxVolatilityInput}
+            setMaxVolatilityInput={setMaxVolatilityInput}
+            loading={loading}
+            error={error}
+            onSubmit={generate}
+          />
 
-        {loading && <LoadingFacts />}
+          {loading && <LoadingFacts />}
 
-        {result && (
-          <div className="space-y-8">
-            <StatusBanner
-              desiredReturn={desiredReturn}
-              maxReturn={result.max_return}
-              volatility={result.portfolio_volatility}
-              maxVolatility={parsePercentInput(maxVolatilityInput)}
-            />
-
-            <PortfolioSummary result={result} />
-
-            <PortfolioSnapshot result={result} />
-
-            <section className="grid gap-6 xl:grid-cols-2">
-              <AllocationChart weights={result.weights} />
-              <CategoryExposureChart weights={result.weights} />
-            </section>
-
-            <section className="grid gap-6 xl:grid-cols-2">
-              <RiskContributionChart
-                riskContributions={riskContributionEntries}
+          {result && (
+            <div className="space-y-4">
+              <StatusBanner
+                desiredReturn={desiredReturn}
+                maxReturn={result.max_return}
+                volatility={result.portfolio_volatility}
+                maxVolatility={parsePercentInput(maxVolatilityInput)}
               />
 
-              <SimulationDistributionChart
-                simulationChart={result.simulation_chart}
-              />
-            </section>
+              <PortfolioOverview result={result} />
 
-            <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-              <WeightsTable weights={result.weights} />
+              <section className="grid gap-4 xl:grid-cols-2">
+                <AllocationChart
+                  weights={result.weights}
+                  tickerToName={result.ticker_to_name}
+                />
+                <CategoryExposureChart weights={result.weights} />
+              </section>
 
-              <DiagnosticsPanel
-                concentration={result.concentration}
-                diversificationRatio={result.diversification_ratio}
-                meaningfulPositionsCount={result.meaningful_positions?.length}
-                topRiskContributions={riskContributionEntries}
-              />
-            </section>
+              <section className="grid gap-4 xl:grid-cols-2">
+                <RiskContributionChart
+                  riskContributions={riskContributionEntries}
+                />
+                <SimulationDistributionChart
+                  simulationChart={result.simulation_chart}
+                />
+              </section>
 
-            <SimulationSummary result={result} />
+              <section className="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
+                <WeightsTable
+                  weights={result.weights}
+                  tickerToName={result.ticker_to_name}
+                />
+                <div className="grid gap-4">
+                  <SimulationSummary result={result} />
+                  <DiagnosticsPanel
+                    concentration={result.concentration}
+                    diversificationRatio={result.diversification_ratio}
+                    meaningfulPositionsCount={result.meaningful_positions?.length}
+                    topRiskContributions={riskContributionEntries}
+                  />
+                </div>
+              </section>
 
-            <ExplanationSection explanation={result.explanation} />
-          </div>
-        )}
+              <ExplanationSection explanation={result.explanation} />
+            </div>
+          )}
+        </div>
       </div>
     </main>
   );

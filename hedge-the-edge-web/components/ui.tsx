@@ -16,7 +16,6 @@ import {
   Area,
 } from "recharts";
 
-
 const TICKER_NAMES: Record<string, string> = {
   AAPL: "Apple",
   MSFT: "Microsoft",
@@ -37,6 +36,10 @@ const TICKER_NAMES: Record<string, string> = {
   APD: "Air Products",
   DBC: "Commodities ETF",
   EWU: "UK ETF",
+  CSCO: "Cisco",
+  CRM: "Salesforce",
+  MS: "Morgan Stanley",
+  XLF: "Financials ETF",
 };
 
 /* =========================================================
@@ -53,60 +56,33 @@ function num(x?: number | null, digits = 2) {
   return x.toFixed(digits);
 }
 
-function tickerName(t: string) {
-  return TICKER_NAMES[t] || t;
+function tickerName(t: string, tickerToName?: Record<string, string>) {
+  return tickerToName?.[t] || t;
 }
 
-function Card({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className="
-      rounded-2xl
-      border
-      bg-white
-      p-3
-      shadow-sm
-    "
-    >
-      <div className="text-xs text-gray-500">
-        {title}
-      </div>
-
-      <div className="text-lg font-semibold">
-        {children}
-      </div>
-    </div>
-  );
+function compactTooltipFormatter(value: unknown, suffix = "%", digits = 2) {
+  return typeof value === "number"
+    ? `${value.toFixed(digits)}${suffix}`
+    : String(value ?? "");
 }
 
 function Box({
   title,
   children,
+  rightSlot,
 }: {
   title: string;
   children: React.ReactNode;
+  rightSlot?: React.ReactNode;
 }) {
   return (
-    <section
-      className="
-      rounded-2xl
-      border
-      bg-white
-      p-4
-      shadow-sm
-      space-y-3
-    "
-    >
-      <h2 className="text-lg font-semibold">
-        {title}
-      </h2>
-
+    <section className="rounded-[26px] border border-white/70 bg-white/88 p-4 shadow-[0_8px_28px_rgba(15,23,42,0.06)] backdrop-blur">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          {title}
+        </h2>
+        {rightSlot ? <div>{rightSlot}</div> : null}
+      </div>
       {children}
     </section>
   );
@@ -175,8 +151,19 @@ export function PortfolioForm({
   onSubmit: () => void;
 }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="grid gap-6 md:grid-cols-2">
+    <section className="rounded-[28px] border border-white/70 bg-white/88 p-6 shadow-[0_8px_28px_rgba(15,23,42,0.06)] backdrop-blur">
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Portfolio inputs
+          </p>
+          <p className="mt-1 text-sm text-slate-600">
+            Set return and optional volatility guardrails.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-5 md:grid-cols-2">
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-700">
             Target return (%)
@@ -185,9 +172,9 @@ export function PortfolioForm({
             value={targetReturnInput}
             onChange={(e) => setTargetReturnInput(e.target.value)}
             placeholder="e.g. 10"
-            className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
           />
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-xs text-slate-500">
             Enter a yearly target return like 8, 10, or 12.
           </p>
         </div>
@@ -200,9 +187,9 @@ export function PortfolioForm({
             value={maxVolatilityInput}
             onChange={(e) => setMaxVolatilityInput(e.target.value)}
             placeholder="e.g. 15"
-            className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
           />
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-xs text-slate-500">
             Leave blank if you do not want a volatility cap.
           </p>
         </div>
@@ -212,18 +199,7 @@ export function PortfolioForm({
         <button
           onClick={onSubmit}
           disabled={loading}
-          className="
-            rounded-2xl
-            bg-slate-900
-            px-6 py-3
-            font-medium
-            text-white
-            shadow-sm
-            hover:bg-slate-800
-            transition
-            disabled:cursor-not-allowed
-            disabled:opacity-60
-          "
+          className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-medium text-white shadow-[0_6px_18px_rgba(15,23,42,0.18)] transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Generating portfolio..." : "Generate portfolio"}
         </button>
@@ -255,8 +231,7 @@ export function StatusBanner({
   maxVolatility?: number | null;
 }) {
   let title = "Portfolio generated";
-  let text =
-    "The optimizer found a portfolio under the current constraints.";
+  let text = "The optimizer found a portfolio under the current constraints.";
   let classes = "border-emerald-200 bg-emerald-50 text-emerald-800";
 
   if (
@@ -291,46 +266,71 @@ export function StatusBanner({
 }
 
 /* =========================================================
-   summary
+   portfolio overview
 ========================================================= */
 
-export function PortfolioSummary({ result }: { result: any }) {
+export function PortfolioOverview({ result }: { result: any }) {
   const desiredReturn = result.desired_return ?? result.target_return;
   const expectedReturn =
     result.expected_portfolio_return ?? result.portfolio_return;
 
-  return (
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Card title="Target return">{pct(desiredReturn)}</Card>
-      <Card title="Expected portfolio return">{pct(expectedReturn)}</Card>
-      <Card title="Portfolio volatility">{pct(result.portfolio_volatility)}</Card>
-      <Card title="Max feasible return">{pct(result.max_return)}</Card>
-    </section>
-  );
-}
-
-/* =========================================================
-   snapshot
-========================================================= */
-
-export function PortfolioSnapshot({ result }: { result: any }) {
-  return (
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Card title="Active positions">{result.active_positions ?? "—"}</Card>
-      <Card title="Largest weight">{pct(result.largest_weight)}</Card>
-      <Card title="Diversification ratio">
-        {result.diversification_ratio !== undefined &&
+  const cards = [
+    {
+      title: "Target return",
+      value: pct(desiredReturn),
+    },
+    {
+      title: "Expected return",
+      value: pct(expectedReturn),
+    },
+    {
+      title: "Volatility",
+      value: pct(result.portfolio_volatility),
+    },
+    {
+      title: "Largest weight",
+      value: pct(result.largest_weight),
+    },
+    {
+      title: "Diversification ratio",
+      value:
+        result.diversification_ratio !== undefined &&
         result.diversification_ratio !== null
           ? result.diversification_ratio.toFixed(2)
-          : "—"}
-      </Card>
-      <Card title="Recompute interval">
-        {typeof result.recompute_interval === "object"
+          : "—",
+    },
+    {
+      title: "Recompute interval",
+      value:
+        typeof result.recompute_interval === "object"
           ? result.recompute_interval.interval_label
-          : result.recompute_interval ??
-            result.recompute_schedule ??
-            "—"}
-      </Card>
+          : result.recompute_interval ?? result.recompute_schedule ?? "—",
+    },
+  ];
+
+  return (
+    <section className="rounded-[26px] border border-white/70 bg-white/88 p-4 shadow-[0_8px_28px_rgba(15,23,42,0.06)] backdrop-blur">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          Portfolio overview
+        </h2>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+        {cards.map((card) => (
+          <div
+            key={card.title}
+            className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#f8fafc_0%,#f1f5f9_100%)] px-4 py-4"
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              {card.title}
+            </p>
+            <p className="mt-2 text-[28px] font-semibold tracking-tight text-slate-950">
+              {card.value}
+            </p>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -354,69 +354,87 @@ const PIE_COLORS = [
 
 export function AllocationChart({
   weights,
+  tickerToName,
 }: {
   weights: Record<string, number>;
+  tickerToName?: Record<string, string>;
 }) {
   const rows = Object.entries(weights)
     .filter(([_, v]) => v > 0.001)
     .sort((a, b) => b[1] - a[1]);
 
-  const data = rows.map(([t, w]) => ({
-    name: t,
-    value: Number((w * 100).toFixed(2)),
+  const data = rows.map(([ticker, weight]) => ({
+    name: ticker,
+    value: Number((weight * 100).toFixed(2)),
   }));
 
+  if (data.length === 0) return null;
+
   return (
-    <Box title="Allocation">
-
-      <div className="grid grid-cols-2 gap-4 items-center">
-
-        {/* PIE */}
-
-        <div className="h-[280px]">
-
-          <ResponsiveContainer>
+    <Box
+      title="Allocation"
+      rightSlot={
+        <span className="text-xs text-slate-400">{rows.length} positions</span>
+      }
+    >
+      <div className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center">
+        <div className="mx-auto h-[170px] w-[170px]">
+          <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={data}
                 dataKey="value"
-                outerRadius={100}
-                innerRadius={40}
+                nameKey="name"
+                innerRadius={42}
+                outerRadius={72}
+                strokeWidth={1}
+                labelLine={false}
               >
                 {data.map((_, i) => (
                   <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                 ))}
               </Pie>
-
-              <Tooltip />
+              <Tooltip
+                formatter={(value, name) => [
+                  `${Number(value).toFixed(2)}%`,
+                  `${name} (${tickerToName?.[String(name)] || name})`,
+                ]}
+              />
             </PieChart>
           </ResponsiveContainer>
-
         </div>
 
-        {/* TABLE */}
-
-        <div className="space-y-1 max-h-[280px] overflow-auto">
-
-          {rows.map(([t, w]) => (
-
+        <div className="max-h-[190px] space-y-1 overflow-y-auto pr-1">
+          {rows.map(([ticker, weight], i) => (
             <div
-              key={t}
-              className="flex justify-between text-sm"
+              key={ticker}
+              className="grid grid-cols-[28px_minmax(0,1fr)_72px] items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2.5"
             >
-              <span>{tickerName(t)}</span>
-              <span>{pct(w)}</span>
+              <span className="text-xs font-medium text-slate-500">
+                {i + 1}
+              </span>
+
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
+                />
+                <span className="truncate text-sm text-slate-800">
+                  {ticker} ({tickerToName?.[ticker] || ticker})
+                </span>
+              </div>
+
+              <span className="text-right text-sm font-semibold text-slate-900">
+                {pct(weight)}
+              </span>
             </div>
-
           ))}
-
         </div>
-
       </div>
-
     </Box>
   );
 }
+
 /* =========================================================
    category exposure chart
 ========================================================= */
@@ -432,29 +450,22 @@ export function CategoryExposureChart({
     NVDA: "Technology",
     CSCO: "Technology",
     CRM: "Technology",
-
     JPM: "Financials",
     MS: "Financials",
     BLK: "Financials",
     XLF: "Financials",
-
     UNH: "Healthcare",
     ABBV: "Healthcare",
-
     WMT: "Consumer Defensive",
     NKE: "Consumer Cyclical",
     MO: "Consumer Defensive",
-
     CAT: "Industrials",
     GE: "Industrials",
-
     AMT: "Real Estate",
     PLD: "Real Estate",
     VNQ: "Real Estate",
-
     SLB: "Energy",
     APD: "Materials",
-
     DBC: "Commodities",
     EWU: "International Equity",
   };
@@ -490,17 +501,22 @@ export function CategoryExposureChart({
   if (data.length === 0) return null;
 
   return (
-    <Box title="Category exposure">
-      <div className="grid gap-6 lg:grid-cols-[1fr_260px] lg:items-center">
-        <div className="h-[320px] w-full">
-          <ResponsiveContainer>
+    <Box
+      title="Category exposure"
+      rightSlot={
+        <span className="text-xs text-slate-400">{data.length} categories</span>
+      }
+    >
+      <div className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center">
+        <div className="mx-auto h-[170px] w-[170px]">
+          <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={data}
                 dataKey="value"
                 nameKey="name"
-                outerRadius={110}
-                innerRadius={52}
+                innerRadius={42}
+                outerRadius={72}
                 labelLine={false}
               >
                 {data.map((_, index) => (
@@ -510,28 +526,32 @@ export function CategoryExposureChart({
                   />
                 ))}
               </Pie>
-              <Tooltip formatter={(value: number) => `${value.toFixed(2)}%`} />
+              <Tooltip
+                formatter={(value) => compactTooltipFormatter(value, "%", 2)}
+              />
             </PieChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="space-y-2">
+        <div className="max-h-[190px] space-y-1 overflow-y-auto pr-1">
           {data.map((item, index) => (
             <div
               key={item.name}
               className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-2">
                 <span
-                  className="h-3 w-3 rounded-full"
+                  className="h-2.5 w-2.5 rounded-full"
                   style={{
                     backgroundColor:
                       CATEGORY_COLORS[index % CATEGORY_COLORS.length],
                   }}
                 />
-                <span className="text-sm text-slate-700">{item.name}</span>
+                <span className="truncate text-sm text-slate-700">
+                  {item.name}
+                </span>
               </div>
-              <span className="text-sm font-medium text-slate-900">
+              <span className="ml-3 text-sm font-semibold text-slate-900">
                 {item.value.toFixed(2)}%
               </span>
             </div>
@@ -551,26 +571,61 @@ export function RiskContributionChart({
 }: {
   riskContributions: { ticker: string; value: number }[];
 }) {
-  const data = (riskContributions || [])
+  const filtered = (riskContributions || [])
     .filter((x) => x.value > 0.0001)
-    .slice(0, 10)
-    .map((x) => ({
-      name: x.ticker,
-      value: Number(x.value.toFixed(4)),
-    }));
+    .slice(0, 8);
+
+  const total = filtered.reduce((sum, item) => sum + item.value, 0);
+
+  const data =
+    total > 0
+      ? filtered
+          .map((item) => ({
+            name: item.ticker,
+            value: Number(((item.value / total) * 100).toFixed(2)),
+          }))
+          .sort((a, b) => b.value - a.value)
+      : [];
 
   if (data.length === 0) return null;
 
   return (
-    <Box title="Risk contribution">
-      <div className="h-[340px] w-full">
-        <ResponsiveContainer>
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="value" fill="#1d4ed8" radius={[8, 8, 0, 0]} />
+    <Box
+      title="Risk contribution"
+      rightSlot={
+        <span className="text-xs text-slate-400">% of total contribution</span>
+      }
+    >
+      <div className="h-[220px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={data}
+            layout="vertical"
+            margin={{ top: 4, right: 8, left: 0, bottom: 4 }}
+          >
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="#e2e8f0"
+              horizontal={false}
+            />
+            <XAxis
+              type="number"
+              tickFormatter={(value) => `${value}%`}
+              domain={[0, "dataMax + 2"]}
+              fontSize={11}
+            />
+            <YAxis
+              type="category"
+              dataKey="name"
+              width={48}
+              fontSize={11}
+              tickLine={false}
+              axisLine={false}
+            />
+            <Tooltip
+              formatter={(value) => compactTooltipFormatter(value, "%", 2)}
+            />
+            <Bar dataKey="value" fill="#1d4ed8" radius={[0, 8, 8, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -586,17 +641,20 @@ function normalizeSimulationChart(input: unknown) {
   if (Array.isArray(input)) {
     return input
       .map((item: any) => {
-        const x =
-          item.bin ??
-          item.x ??
-          item.return ??
-          item.center ??
-          item.label ??
-          "";
-        const y = item.count ?? item.frequency ?? item.y ?? item.value ?? 0;
+        const rawX =
+          item.bin ?? item.x ?? item.return ?? item.center ?? item.label ?? "";
+        const rawY = item.count ?? item.frequency ?? item.y ?? item.value ?? 0;
+
+        const xNumeric = typeof rawX === "number" ? rawX * 100 : Number(rawX);
+        const xLabel =
+          typeof rawX === "number"
+            ? `${(rawX * 100).toFixed(1)}%`
+            : String(rawX);
+
         return {
-          x: typeof x === "number" ? `${(x * 100).toFixed(1)}%` : String(x),
-          y: Number(y),
+          x: xLabel,
+          xNumeric: Number.isFinite(xNumeric) ? xNumeric : null,
+          y: Number(rawY),
         };
       })
       .filter((d) => !Number.isNaN(d.y));
@@ -613,6 +671,7 @@ function normalizeSimulationChart(input: unknown) {
 
     return bins.map((bin, idx) => ({
       x: typeof bin === "number" ? `${(bin * 100).toFixed(1)}%` : String(bin),
+      xNumeric: typeof bin === "number" ? bin * 100 : Number(bin),
       y: Number(counts[idx] ?? 0),
     }));
   }
@@ -625,24 +684,43 @@ export function SimulationDistributionChart({
 }: {
   simulationChart: unknown;
 }) {
-  const data = useMemo(() => normalizeSimulationChart(simulationChart), [simulationChart]);
+  const data = useMemo(
+    () => normalizeSimulationChart(simulationChart),
+    [simulationChart]
+  );
 
   if (data.length === 0) return null;
 
   return (
     <Box title="Simulation distribution">
-      <div className="h-[340px] w-full">
-        <ResponsiveContainer>
-          <AreaChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="x" minTickGap={20} />
-            <YAxis />
-            <Tooltip />
+      <div className="h-[210px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart
+            data={data}
+            margin={{ top: 6, right: 8, left: 0, bottom: 0 }}
+          >
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="#e2e8f0"
+              vertical={false}
+            />
+            <XAxis
+              dataKey="x"
+              fontSize={11}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis fontSize={11} tickLine={false} axisLine={false} />
+            <Tooltip
+              formatter={(value) => compactTooltipFormatter(value, "", 0)}
+              labelFormatter={(label) => `Return bucket: ${label}`}
+            />
             <Area
               type="monotone"
               dataKey="y"
               stroke="#0f766e"
               fill="#99f6e4"
+              fillOpacity={0.8}
               strokeWidth={2}
             />
           </AreaChart>
@@ -660,24 +738,30 @@ export function SimulationSummary({ result }: { result: any }) {
   const s = result.simulation_summary;
   const compact = result.simulation;
 
-  return (
-    <Box title="Simulation outlook">
-      <p className="mb-6 text-slate-600">
-        Summary of the simulated annual return distribution.
-      </p>
+  const cards = [
+    { label: "Mean", value: pct(s?.mean_return ?? compact?.mean) },
+    { label: "Median", value: pct(s?.median_return ?? compact?.median) },
+    { label: "Loss prob.", value: pct(s?.loss_probability ?? compact?.loss_probability) },
+    { label: "5th pct.", value: pct(s?.percentile_5 ?? compact?.p5) },
+    { label: "95th pct.", value: pct(s?.percentile_95 ?? compact?.p95) },
+  ];
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Card title="Mean return">{pct(s?.mean_return ?? compact?.mean)}</Card>
-        <Card title="Median return">{pct(s?.median_return ?? compact?.median)}</Card>
-        <Card title="Loss probability">
-          {pct(s?.loss_probability ?? compact?.loss_probability)}
-        </Card>
-        <Card title="5th percentile">
-          {pct(s?.percentile_5 ?? compact?.p5)}
-        </Card>
-        <Card title="95th percentile">
-          {pct(s?.percentile_95 ?? compact?.p95)}
-        </Card>
+  return (
+    <Box title="Simulation summary">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        {cards.map((item) => (
+          <div
+            key={item.label}
+            className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#f8fafc_0%,#f1f5f9_100%)] px-4 py-4"
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              {item.label}
+            </p>
+            <p className="mt-2 text-lg font-semibold text-slate-950">
+              {item.value}
+            </p>
+          </div>
+        ))}
       </div>
     </Box>
   );
@@ -687,32 +771,56 @@ export function SimulationSummary({ result }: { result: any }) {
    weights table
 ========================================================= */
 
-export function WeightsTable({ weights }: { weights: Record<string, number> }) {
+export function WeightsTable({
+  weights,
+  tickerToName,
+}: {
+  weights: Record<string, number>;
+  tickerToName?: Record<string, string>;
+}) {
   const rows = Object.entries(weights)
     .filter(([_, v]) => v > 0.001)
     .sort((a, b) => b[1] - a[1]);
 
   return (
-    <Box title="Portfolio allocation">
-      <p className="mb-4 text-slate-600">Only meaningful positions are shown.</p>
+    <Box
+      title="Weights"
+      rightSlot={
+        <span className="text-xs text-slate-400">meaningful positions only</span>
+      }
+    >
+      <div className="max-h-[280px] overflow-y-auto rounded-2xl border border-slate-200 bg-white">
+        <div className="grid grid-cols-[44px_92px_minmax(0,1fr)_96px] border-b border-slate-200 bg-slate-50/80 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <span>#</span>
+          <span>Ticker</span>
+          <span>Name</span>
+          <span className="text-right">Weight</span>
+        </div>
 
-      <div className="space-y-2">
-        {rows.map(([ticker, weight]) => (
-          <div
-            key={ticker}
-            className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3"
-          >
-            <span className="font-medium text-slate-900">{ticker}</span>
-            <span className="text-slate-700">{pct(weight)}</span>
-          </div>
-        ))}
+        <div className="divide-y divide-slate-100">
+          {rows.map(([ticker, weight], index) => (
+            <div
+              key={ticker}
+              className="grid grid-cols-[44px_92px_minmax(0,1fr)_96px] items-center px-4 py-3 text-sm"
+            >
+              <span className="text-slate-400">{index + 1}</span>
+              <span className="font-semibold text-slate-950">{ticker}</span>
+              <span className="truncate text-slate-600">
+                {tickerName(ticker, tickerToName)}
+              </span>
+              <span className="text-right font-semibold text-slate-950">
+                {pct(weight)}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </Box>
   );
 }
 
 /* =========================================================
-   explanation
+   explanation helpers
 ========================================================= */
 
 function normalizeTextList(value: any): string[] {
@@ -764,127 +872,363 @@ function normalizeVocabulary(rawVocabulary: any) {
   return [];
 }
 
+function extractMetricChips(items: string[]) {
+  if (!items.length) {
+    return { chips: [], rest: [] as string[] };
+  }
+
+  const first = items[0] || "";
+
+  const targetMatch = first.match(/Target return:\s*([\d.]+%)/i);
+  const expectedMatch = first.match(/Expected return:\s*([\d.]+%)/i);
+  const volMatch = first.match(/Volatility:\s*([\d.]+%)/i);
+
+  const chips = [
+    targetMatch ? { label: "Target", value: targetMatch[1] } : null,
+    expectedMatch ? { label: "Expected", value: expectedMatch[1] } : null,
+    volMatch ? { label: "Volatility", value: volMatch[1] } : null,
+  ].filter(Boolean) as { label: string; value: string }[];
+
+  const cleanedFirst = first
+    .replace(/Target return:\s*[\d.]+%\.\s*/i, "")
+    .replace(/Expected return:\s*[\d.]+%\.\s*/i, "")
+    .replace(/Volatility:\s*[\d.]+%\.\s*/i, "")
+    .trim();
+
+  const rest =
+    cleanedFirst.length > 0 ? [cleanedFirst, ...items.slice(1)] : items.slice(1);
+
+  return { chips, rest };
+}
+
+function TabButton({
+  label,
+  active,
+  onClick,
+  count,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  count?: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition",
+        active
+          ? "border-slate-900 bg-slate-900 text-white"
+          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900",
+      ].join(" ")}
+    >
+      <span>{label}</span>
+      {typeof count === "number" && count > 0 ? (
+        <span
+          className={[
+            "rounded-full px-2 py-0.5 text-xs",
+            active ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600",
+          ].join(" ")}
+        >
+          {count}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function CommentaryCard({
+  title,
+  items,
+  tone = "default",
+}: {
+  title: string;
+  items: string[];
+  tone?: "default" | "risk" | "simulation";
+}) {
+  if (!items.length) return null;
+
+  const toneClass =
+    tone === "risk"
+      ? "border-blue-200 bg-blue-50"
+      : tone === "simulation"
+      ? "border-violet-200 bg-violet-50"
+      : "border-slate-200 bg-white";
+
+  return (
+    <section className={`rounded-2xl border p-5 shadow-sm ${toneClass}`}>
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+        {title}
+      </h3>
+
+      <div className="mt-4 space-y-3">
+        {items.map((item, i) => (
+          <div
+            key={i}
+            className="rounded-xl bg-white/70 px-4 py-3 text-sm leading-7 text-slate-700"
+          >
+            {item}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* =========================================================
+   explanation
+========================================================= */
+
 export function ExplanationSection({ explanation }: { explanation: any }) {
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "risk" | "simulation" | "actions" | "vocabulary"
+  >("overview");
+
   if (!explanation) return null;
 
-  const summaryBlocks =
+  const portfolioSummary =
     typeof explanation === "string"
       ? normalizeTextList(explanation)
-      : [
+      : normalizeTextList(explanation?.portfolio_summary);
+
+  const riskCommentary = normalizeTextList(explanation?.risk_commentary);
+  const simulationCommentary = normalizeTextList(
+    explanation?.simulation_commentary
+  );
+
+  const fallbackSummary =
+    portfolioSummary.length === 0 &&
+    riskCommentary.length === 0 &&
+    simulationCommentary.length === 0
+      ? [
           ...normalizeTextList(explanation?.summary),
           ...normalizeTextList(explanation?.text),
           ...normalizeTextList(explanation?.overview),
           ...normalizeTextList(explanation?.rationale),
           ...normalizeTextList(explanation?.portfolio_story),
-        ].filter(Boolean);
+        ]
+      : [];
 
   const watch = normalizeTextList(explanation?.watch_for);
   const takeaways = normalizeTextList(explanation?.takeaways);
   const vocabularyEntries = normalizeVocabulary(explanation?.vocabulary);
 
-  const explanationBlocks =
-    summaryBlocks.length > 0
-      ? summaryBlocks
+  const mainSummary =
+    portfolioSummary.length > 0
+      ? portfolioSummary
+      : fallbackSummary.length > 0
+      ? fallbackSummary
       : [
           "Portfolio explanation generated from the current diagnostics and simulation output.",
         ];
 
+  const { chips, rest: summaryBody } = useMemo(
+    () => extractMetricChips(mainSummary),
+    [mainSummary]
+  );
+
+  const tabCounts = {
+    overview: summaryBody.length + chips.length,
+    risk: riskCommentary.length,
+    simulation: simulationCommentary.length,
+    actions: watch.length + takeaways.length,
+    vocabulary: vocabularyEntries.length,
+  };
+
   return (
     <section className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-        <div className="space-y-4">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
             <h2 className="text-lg font-semibold text-slate-900">Explanation</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Portfolio interpretation, risk context, scenario behavior, and action cues.
+            </p>
+          </div>
 
-            <div className="mt-4 space-y-4">
-              {explanationBlocks.map((block, i) => (
-                <p
-                  key={i}
-                  className="text-sm leading-7 text-slate-700 whitespace-pre-wrap"
-                >
-                  {block}
-                </p>
-              ))}
-            </div>
-          </section>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Watch for
-              </h3>
-
-              {watch.length > 0 ? (
-                <div className="mt-3 space-y-2">
-                  {watch.map((item, i) => (
-                    <div
-                      key={i}
-                      className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-3 text-sm leading-6 text-slate-700"
-                    >
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-slate-500">
-                  No watch-for items available.
-                </p>
-              )}
-            </section>
-
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Takeaways
-              </h3>
-
-              {takeaways.length > 0 ? (
-                <div className="mt-3 space-y-2">
-                  {takeaways.map((item, i) => (
-                    <div
-                      key={i}
-                      className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-3 text-sm leading-6 text-slate-700"
-                    >
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-slate-500">
-                  No takeaways available.
-                </p>
-              )}
-            </section>
+          <div className="flex flex-wrap gap-2">
+            <TabButton
+              label="Overview"
+              active={activeTab === "overview"}
+              onClick={() => setActiveTab("overview")}
+              count={tabCounts.overview}
+            />
+            <TabButton
+              label="Risk"
+              active={activeTab === "risk"}
+              onClick={() => setActiveTab("risk")}
+              count={tabCounts.risk}
+            />
+            <TabButton
+              label="Simulation"
+              active={activeTab === "simulation"}
+              onClick={() => setActiveTab("simulation")}
+              count={tabCounts.simulation}
+            />
+            <TabButton
+              label="Actions"
+              active={activeTab === "actions"}
+              onClick={() => setActiveTab("actions")}
+              count={tabCounts.actions}
+            />
+            <TabButton
+              label="Vocabulary"
+              active={activeTab === "vocabulary"}
+              onClick={() => setActiveTab("vocabulary")}
+              count={tabCounts.vocabulary}
+            />
           </div>
         </div>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Vocabulary
-          </h3>
-
-          {vocabularyEntries.length > 0 ? (
-            <div className="mt-3 grid gap-2">
-              {vocabularyEntries.map((item: any, index: number) => (
-                <div
-                  key={`${item.term}-${index}`}
-                  className="rounded-xl bg-slate-50 px-3 py-3"
-                >
-                  <p className="text-sm font-semibold text-slate-900">
-                    {item.term}
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
-                    {item.definition}
-                  </p>
+        <div className="mt-5">
+          {activeTab === "overview" && (
+            <div className="space-y-4">
+              {chips.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {chips.map((chip) => (
+                    <div
+                      key={chip.label}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {chip.label}
+                      </p>
+                      <p className="mt-2 text-xl font-semibold text-slate-900">
+                        {chip.value}
+                      </p>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : null}
+
+              <div className="grid gap-3">
+                {summaryBody.map((block, i) => (
+                  <div
+                    key={i}
+                    className={[
+                      "rounded-2xl border px-4 py-4 text-sm leading-7",
+                      i === 0
+                        ? "border-slate-200 bg-slate-50 font-medium text-slate-900"
+                        : "border-slate-100 bg-white text-slate-700",
+                    ].join(" ")}
+                  >
+                    {block}
+                  </div>
+                ))}
+              </div>
             </div>
-          ) : (
-            <p className="mt-3 text-sm text-slate-500">
-              No vocabulary items available.
-            </p>
           )}
-        </section>
-      </div>
+
+          {activeTab === "risk" && (
+            <div>
+              {riskCommentary.length > 0 ? (
+                <CommentaryCard
+                  title="Risk commentary"
+                  items={riskCommentary}
+                  tone="risk"
+                />
+              ) : (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                  No risk commentary available.
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "simulation" && (
+            <div>
+              {simulationCommentary.length > 0 ? (
+                <CommentaryCard
+                  title="Simulation commentary"
+                  items={simulationCommentary}
+                  tone="simulation"
+                />
+              ) : (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                  No simulation commentary available.
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "actions" && (
+            <div className="grid gap-4 xl:grid-cols-2">
+              <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-800">
+                  Watch for
+                </h3>
+
+                {watch.length > 0 ? (
+                  <div className="mt-3 space-y-3">
+                    {watch.map((item, i) => (
+                      <div
+                        key={i}
+                        className="rounded-xl border border-amber-200 bg-white/75 px-4 py-3 text-sm leading-6 text-slate-700"
+                      >
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-slate-500">
+                    No watch-for items available.
+                  </p>
+                )}
+              </section>
+
+              <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-emerald-800">
+                  Takeaways
+                </h3>
+
+                {takeaways.length > 0 ? (
+                  <div className="mt-3 space-y-3">
+                    {takeaways.map((item, i) => (
+                      <div
+                        key={i}
+                        className="rounded-xl border border-emerald-200 bg-white/75 px-4 py-3 text-sm leading-6 text-slate-700"
+                      >
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-slate-500">
+                    No takeaways available.
+                  </p>
+                )}
+              </section>
+            </div>
+          )}
+
+          {activeTab === "vocabulary" && (
+            <div>
+              {vocabularyEntries.length > 0 ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {vocabularyEntries.map((item: any, index: number) => (
+                    <div
+                      key={`${item.term}-${index}`}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 shadow-sm"
+                    >
+                      <p className="text-sm font-semibold text-slate-900">
+                        {item.term}
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {item.definition}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                  No vocabulary items available.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
     </section>
   );
 }
@@ -904,48 +1248,73 @@ export function DiagnosticsPanel({
   meaningfulPositionsCount?: number;
   topRiskContributions: { ticker: string; value: number }[];
 }) {
+  const filtered = (topRiskContributions || []).filter((x) => x.value > 0);
+  const total = filtered.reduce((sum, item) => sum + item.value, 0);
+
+  const topRows =
+    total > 0
+      ? filtered.slice(0, 5).map((item) => ({
+          ticker: item.ticker,
+          value: Number(((item.value / total) * 100).toFixed(2)),
+        }))
+      : [];
+
   return (
-    <div className="space-y-8">
-      <Box title="Risk diagnostics">
-        <div className="space-y-4">
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Concentration</p>
-            <p className="mt-1 text-xl font-semibold">{num(concentration, 4)}</p>
-          </div>
-
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Diversification ratio</p>
-            <p className="mt-1 text-xl font-semibold">
-              {num(diversificationRatio, 4)}
-            </p>
-          </div>
-
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Meaningful positions</p>
-            <p className="mt-1 text-xl font-semibold">
-              {meaningfulPositionsCount ?? "—"}
-            </p>
-          </div>
+    <Box title="Diagnostics">
+      <div className="grid gap-3 lg:grid-cols-[220px_220px_160px_minmax(0,1fr)]">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Concentration
+          </p>
+          <p className="mt-2 text-lg font-semibold text-slate-950">
+            {num(concentration, 4)}
+          </p>
         </div>
-      </Box>
 
-      <Box title="Top risk contributors">
-        <div className="space-y-3">
-          {topRiskContributions.slice(0, 6).map((item) => (
-            <div
-              key={item.ticker}
-              className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3"
-            >
-              <span className="font-medium">{item.ticker}</span>
-              <span className="text-slate-700">{item.value.toFixed(4)}</span>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Diversification ratio
+          </p>
+          <p className="mt-2 text-lg font-semibold text-slate-950">
+            {num(diversificationRatio, 4)}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Positions
+          </p>
+          <p className="mt-2 text-lg font-semibold text-slate-950">
+            {meaningfulPositionsCount ?? "—"}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Top risk drivers
+          </p>
+
+          {topRows.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {topRows.map((item) => (
+                <div
+                  key={item.ticker}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <span className="text-slate-700">{item.ticker}</span>
+                  <span className="font-semibold text-slate-950">
+                    {item.value.toFixed(2)}%
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
-
-          {topRiskContributions.length === 0 && (
-            <p className="text-slate-500">No risk contribution data available.</p>
+          ) : (
+            <p className="mt-2 text-sm text-slate-500">
+              No risk contribution data available.
+            </p>
           )}
         </div>
-      </Box>
-    </div>
+      </div>
+    </Box>
   );
 }
