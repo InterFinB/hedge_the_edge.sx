@@ -16,6 +16,29 @@ import {
   Area,
 } from "recharts";
 
+
+const TICKER_NAMES: Record<string, string> = {
+  AAPL: "Apple",
+  MSFT: "Microsoft",
+  NVDA: "Nvidia",
+  JPM: "JPMorgan",
+  BLK: "BlackRock",
+  UNH: "UnitedHealth",
+  ABBV: "AbbVie",
+  WMT: "Walmart",
+  NKE: "Nike",
+  MO: "Altria",
+  CAT: "Caterpillar",
+  GE: "General Electric",
+  AMT: "American Tower",
+  PLD: "Prologis",
+  VNQ: "Vanguard REIT",
+  SLB: "Schlumberger",
+  APD: "Air Products",
+  DBC: "Commodities ETF",
+  EWU: "UK ETF",
+};
+
 /* =========================================================
    helpers
 ========================================================= */
@@ -30,6 +53,10 @@ function num(x?: number | null, digits = 2) {
   return x.toFixed(digits);
 }
 
+function tickerName(t: string) {
+  return TICKER_NAMES[t] || t;
+}
+
 function Card({
   title,
   children,
@@ -40,20 +67,18 @@ function Card({
   return (
     <div
       className="
-        rounded-3xl
-        border border-slate-200
-        bg-white
-        p-5
-        shadow-sm
-        transition
-        hover:shadow-md
-      "
+      rounded-2xl
+      border
+      bg-white
+      p-3
+      shadow-sm
+    "
     >
-      <div className="text-xs uppercase tracking-wide text-slate-500">
+      <div className="text-xs text-gray-500">
         {title}
       </div>
 
-      <div className="mt-2 text-2xl font-semibold text-slate-900">
+      <div className="text-lg font-semibold">
         {children}
       </div>
     </div>
@@ -70,15 +95,15 @@ function Box({
   return (
     <section
       className="
-        rounded-3xl
-        border border-slate-200
-        bg-white
-        p-6
-        shadow-sm
-        space-y-4
-      "
+      rounded-2xl
+      border
+      bg-white
+      p-4
+      shadow-sm
+      space-y-3
+    "
     >
-      <h2 className="text-xl font-semibold tracking-tight text-slate-900">
+      <h2 className="text-lg font-semibold">
         {title}
       </h2>
 
@@ -327,98 +352,124 @@ const PIE_COLORS = [
   "#c2410c",
 ];
 
-export function AllocationChart({ weights }: { weights: Record<string, number> }) {
-  const data = Object.entries(weights)
-    .filter(([_, w]) => w > 0.001)
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, value]) => ({
-      name,
-      value: Number((value * 100).toFixed(2)),
-    }));
+export function AllocationChart({
+  weights,
+}: {
+  weights: Record<string, number>;
+}) {
+  const rows = Object.entries(weights)
+    .filter(([_, v]) => v > 0.001)
+    .sort((a, b) => b[1] - a[1]);
 
-  if (data.length === 0) return null;
+  const data = rows.map(([t, w]) => ({
+    name: t,
+    value: Number((w * 100).toFixed(2)),
+  }));
 
   return (
-    <Box title="Allocation chart">
-      <div className="h-[380px] w-full">
-        <ResponsiveContainer>
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              outerRadius={130}
-              innerRadius={60}
-              label={({ name, value }) => `${name} ${value}%`}
-              labelLine={false}
+    <Box title="Allocation">
+
+      <div className="grid grid-cols-2 gap-4 items-center">
+
+        {/* PIE */}
+
+        <div className="h-[280px]">
+
+          <ResponsiveContainer>
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="value"
+                outerRadius={100}
+                innerRadius={40}
+              >
+                {data.map((_, i) => (
+                  <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                ))}
+              </Pie>
+
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+
+        </div>
+
+        {/* TABLE */}
+
+        <div className="space-y-1 max-h-[280px] overflow-auto">
+
+          {rows.map(([t, w]) => (
+
+            <div
+              key={t}
+              className="flex justify-between text-sm"
             >
-              {data.map((_, index) => (
-                <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip formatter={(value: number) => `${value.toFixed(2)}%`} />
-          </PieChart>
-        </ResponsiveContainer>
+              <span>{tickerName(t)}</span>
+              <span>{pct(w)}</span>
+            </div>
+
+          ))}
+
+        </div>
+
       </div>
+
     </Box>
   );
 }
-
 /* =========================================================
    category exposure chart
 ========================================================= */
-
-const TICKER_CATEGORY: Record<string, string> = {
-  AAPL: "Technology",
-  MSFT: "Technology",
-  NVDA: "Technology",
-  CSCO: "Technology",
-  CRM: "Technology",
-
-  JPM: "Financials",
-  MS: "Financials",
-  BLK: "Financials",
-  XLF: "Financials",
-
-  UNH: "Healthcare",
-  ABBV: "Healthcare",
-
-  WMT: "Consumer Defensive",
-  NKE: "Consumer Cyclical",
-  MO: "Consumer Defensive",
-
-  CAT: "Industrials",
-  GE: "Industrials",
-
-  AMT: "Real Estate",
-  PLD: "Real Estate",
-  VNQ: "Real Estate",
-
-  SLB: "Energy",
-  APD: "Materials",
-
-  DBC: "Commodities",
-  EWU: "International Equity",
-};
-
-const CATEGORY_COLORS = [
-  "#0f766e",
-  "#1d4ed8",
-  "#7c3aed",
-  "#ea580c",
-  "#65a30d",
-  "#db2777",
-  "#475569",
-  "#0891b2",
-];
 
 export function CategoryExposureChart({
   weights,
 }: {
   weights: Record<string, number>;
 }) {
+  const TICKER_CATEGORY: Record<string, string> = {
+    AAPL: "Technology",
+    MSFT: "Technology",
+    NVDA: "Technology",
+    CSCO: "Technology",
+    CRM: "Technology",
+
+    JPM: "Financials",
+    MS: "Financials",
+    BLK: "Financials",
+    XLF: "Financials",
+
+    UNH: "Healthcare",
+    ABBV: "Healthcare",
+
+    WMT: "Consumer Defensive",
+    NKE: "Consumer Cyclical",
+    MO: "Consumer Defensive",
+
+    CAT: "Industrials",
+    GE: "Industrials",
+
+    AMT: "Real Estate",
+    PLD: "Real Estate",
+    VNQ: "Real Estate",
+
+    SLB: "Energy",
+    APD: "Materials",
+
+    DBC: "Commodities",
+    EWU: "International Equity",
+  };
+
+  const CATEGORY_COLORS = [
+    "#0f766e",
+    "#1d4ed8",
+    "#7c3aed",
+    "#ea580c",
+    "#65a30d",
+    "#db2777",
+    "#475569",
+    "#0891b2",
+  ];
+
   const categoryTotals = Object.entries(weights).reduce<Record<string, number>>(
     (acc, [ticker, weight]) => {
       if (weight <= 0.001) return acc;
@@ -440,27 +491,52 @@ export function CategoryExposureChart({
 
   return (
     <Box title="Category exposure">
-      <div className="h-[360px] w-full">
-        <ResponsiveContainer>
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              outerRadius={125}
-              label={({ name, value }) => `${name} ${value}%`}
-              labelLine={false}
+      <div className="grid gap-6 lg:grid-cols-[1fr_260px] lg:items-center">
+        <div className="h-[320px] w-full">
+          <ResponsiveContainer>
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="name"
+                outerRadius={110}
+                innerRadius={52}
+                labelLine={false}
+              >
+                {data.map((_, index) => (
+                  <Cell
+                    key={index}
+                    fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]}
+                  />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value: number) => `${value.toFixed(2)}%`} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="space-y-2">
+          {data.map((item, index) => (
+            <div
+              key={item.name}
+              className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2"
             >
-              {data.map((_, index) => (
-                <Cell
-                  key={index}
-                  fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]}
+              <div className="flex items-center gap-3">
+                <span
+                  className="h-3 w-3 rounded-full"
+                  style={{
+                    backgroundColor:
+                      CATEGORY_COLORS[index % CATEGORY_COLORS.length],
+                  }}
                 />
-              ))}
-            </Pie>
-            <Tooltip formatter={(value: number) => `${value.toFixed(2)}%`} />
-          </PieChart>
-        </ResponsiveContainer>
+                <span className="text-sm text-slate-700">{item.name}</span>
+              </div>
+              <span className="text-sm font-medium text-slate-900">
+                {item.value.toFixed(2)}%
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </Box>
   );
@@ -475,7 +551,7 @@ export function RiskContributionChart({
 }: {
   riskContributions: { ticker: string; value: number }[];
 }) {
-  const data = riskContributions
+  const data = (riskContributions || [])
     .filter((x) => x.value > 0.0001)
     .slice(0, 10)
     .map((x) => ({
@@ -639,143 +715,177 @@ export function WeightsTable({ weights }: { weights: Record<string, number> }) {
    explanation
 ========================================================= */
 
-function extractExplanationSections(explanation: any) {
-  if (!explanation) {
-    return {
-      summary: "",
-      watchFor: [] as string[],
-      takeaways: [] as string[],
-      vocabulary: [] as Array<{ term: string; definition: string }>,
-    };
+function normalizeTextList(value: any): string[] {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => normalizeTextList(item)).filter(Boolean);
   }
 
-  if (typeof explanation === "string") {
-    return {
-      summary: explanation,
-      watchFor: [],
-      takeaways: [],
-      vocabulary: [],
-    };
+  if (typeof value === "string") {
+    return value
+      .split(/\n{2,}/)
+      .map((x) => x.trim())
+      .filter(Boolean);
   }
 
-  const summary =
-    typeof explanation.summary === "string" ? explanation.summary : "";
+  if (typeof value === "object") {
+    return Object.values(value)
+      .flatMap((item) => normalizeTextList(item))
+      .filter(Boolean);
+  }
 
-  const watchFor = Array.isArray(explanation.watch_for)
-    ? explanation.watch_for.map(String)
-    : typeof explanation.watch_for === "string"
-    ? [explanation.watch_for]
-    : [];
+  return [String(value)];
+}
 
-  const takeaways = Array.isArray(explanation.takeaways)
-    ? explanation.takeaways.map(String)
-    : typeof explanation.takeaways === "string"
-    ? [explanation.takeaways]
-    : [];
+function normalizeVocabulary(rawVocabulary: any) {
+  if (!rawVocabulary) return [];
 
-  let vocabulary: Array<{ term: string; definition: string }> = [];
+  if (Array.isArray(rawVocabulary)) {
+    return rawVocabulary.map((item: any, index: number) => {
+      const text = String(item);
+      const cleaned = text.replace(/^\d+:\s*/, "");
+      const parts = cleaned.split("—");
 
-  if (
-    explanation.vocabulary &&
-    typeof explanation.vocabulary === "object" &&
-    !Array.isArray(explanation.vocabulary)
-  ) {
-    vocabulary = Object.entries(explanation.vocabulary).map(
-      ([term, definition]) => ({
-        term,
-        definition: String(definition),
-      })
-    );
-  } else if (Array.isArray(explanation.vocabulary)) {
-    vocabulary = explanation.vocabulary.map((item: any, index: number) => ({
-      term: `Term ${index + 1}`,
-      definition: String(item),
+      return {
+        term: parts[0]?.trim() || `Term ${index + 1}`,
+        definition: parts.slice(1).join("—").trim() || cleaned,
+      };
+    });
+  }
+
+  if (typeof rawVocabulary === "object") {
+    return Object.entries(rawVocabulary).map(([key, value]) => ({
+      term: String(key).replace(/^\d+:\s*/, "").trim(),
+      definition: String(value),
     }));
-  } else if (typeof explanation.vocabulary === "string") {
-    vocabulary = [{ term: "Vocabulary", definition: explanation.vocabulary }];
   }
 
-  return { summary, watchFor, takeaways, vocabulary };
+  return [];
 }
 
 export function ExplanationSection({ explanation }: { explanation: any }) {
-  const sections = extractExplanationSections(explanation);
+  if (!explanation) return null;
+
+  const summaryBlocks =
+    typeof explanation === "string"
+      ? normalizeTextList(explanation)
+      : [
+          ...normalizeTextList(explanation?.summary),
+          ...normalizeTextList(explanation?.text),
+          ...normalizeTextList(explanation?.overview),
+          ...normalizeTextList(explanation?.rationale),
+          ...normalizeTextList(explanation?.portfolio_story),
+        ].filter(Boolean);
+
+  const watch = normalizeTextList(explanation?.watch_for);
+  const takeaways = normalizeTextList(explanation?.takeaways);
+  const vocabularyEntries = normalizeVocabulary(explanation?.vocabulary);
+
+  const explanationBlocks =
+    summaryBlocks.length > 0
+      ? summaryBlocks
+      : [
+          "Portfolio explanation generated from the current diagnostics and simulation output.",
+        ];
 
   return (
-    <div className="space-y-8">
-      <section className="grid gap-6 xl:grid-cols-2">
-        <Box title="Explanation">
-          <p className="whitespace-pre-wrap leading-7 text-slate-700">
-            {sections.summary || "No explanation summary available yet."}
-          </p>
-        </Box>
+    <section className="space-y-4">
+      <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+        <div className="space-y-4">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Explanation</h2>
 
-        <div className="space-y-8">
-          <Box title="What to watch for">
-            {sections.watchFor.length > 0 ? (
-              <div className="space-y-3">
-                {sections.watchFor.map((item, index) => (
-                  <div
-                    key={`${item}-${index}`}
-                    className="rounded-2xl bg-slate-50 p-4 text-slate-700"
-                  >
-                    {item}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-slate-500">No watch-for items available yet.</p>
-            )}
-          </Box>
+            <div className="mt-4 space-y-4">
+              {explanationBlocks.map((block, i) => (
+                <p
+                  key={i}
+                  className="text-sm leading-7 text-slate-700 whitespace-pre-wrap"
+                >
+                  {block}
+                </p>
+              ))}
+            </div>
+          </section>
 
-          <Box title="Takeaways">
-            {sections.takeaways.length > 0 ? (
-              <div className="space-y-3">
-                {sections.takeaways.map((item, index) => (
-                  <div
-                    key={`${item}-${index}`}
-                    className="rounded-2xl bg-slate-50 p-4 text-slate-700"
-                  >
-                    {item}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-slate-500">No takeaways available yet.</p>
-            )}
-          </Box>
-        </div>
-      </section>
-
-      <Box title="Vocabulary">
-        {sections.vocabulary.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2">
-            {sections.vocabulary.map((item) => (
-              <div key={item.term} className="rounded-2xl bg-slate-50 p-4">
-                <p className="font-semibold text-slate-900">{item.term}</p>
-                <p className="mt-2 leading-7 text-slate-700">{item.definition}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-slate-500">No vocabulary items available yet.</p>
-        )}
-      </Box>
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                Watch for
+              </h3>
 
-      <Box title="Important assumptions">
-        <div className="space-y-3 text-slate-700">
-          <div className="rounded-2xl bg-slate-50 p-4">
-            The optimizer uses historical-data-derived estimates and current constraints.
-          </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
-            Simulation output describes a range of possible outcomes, not a guaranteed forecast.
-          </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
-            Real-world results can differ because of regime changes, transaction costs, and data limitations.
+              {watch.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {watch.map((item, i) => (
+                    <div
+                      key={i}
+                      className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-3 text-sm leading-6 text-slate-700"
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-slate-500">
+                  No watch-for items available.
+                </p>
+              )}
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                Takeaways
+              </h3>
+
+              {takeaways.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {takeaways.map((item, i) => (
+                    <div
+                      key={i}
+                      className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-3 text-sm leading-6 text-slate-700"
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-slate-500">
+                  No takeaways available.
+                </p>
+              )}
+            </section>
           </div>
         </div>
-      </Box>
-    </div>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Vocabulary
+          </h3>
+
+          {vocabularyEntries.length > 0 ? (
+            <div className="mt-3 grid gap-2">
+              {vocabularyEntries.map((item: any, index: number) => (
+                <div
+                  key={`${item.term}-${index}`}
+                  className="rounded-xl bg-slate-50 px-3 py-3"
+                >
+                  <p className="text-sm font-semibold text-slate-900">
+                    {item.term}
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    {item.definition}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">
+              No vocabulary items available.
+            </p>
+          )}
+        </section>
+      </div>
+    </section>
   );
 }
 
