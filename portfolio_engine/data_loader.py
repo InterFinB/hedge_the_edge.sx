@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import datetime
+import time
 
 from portfolio_engine.config import TICKERS, START_DATE
 from portfolio_engine.returns import compute_expected_returns
@@ -14,6 +15,8 @@ _cached_tickers = None
 _cache_timestamp = None
 
 CACHE_TTL_SECONDS = 3600  # 1 hour
+DOWNLOAD_RETRIES = 3
+RETRY_SLEEP_SECONDS = 5
 
 
 def _is_cache_valid() -> bool:
@@ -26,17 +29,7 @@ def _is_cache_valid() -> bool:
     return age < CACHE_TTL_SECONDS
 
 
-def _download_and_prepare_price_data() -> pd.DataFrame:
-    end_date = datetime.datetime.today()
-
-    raw = yf.download(
-        TICKERS,
-        start=START_DATE,
-        end=end_date,
-        progress=False,
-        auto_adjust=False,
-    )
-
+def _extract_price_frame(raw: pd.DataFrame) -> pd.DataFrame:
     if raw is None or raw.empty:
         raise ValueError("Yahoo Finance returned no data.")
 
@@ -74,26 +67,51 @@ def _download_and_prepare_price_data() -> pd.DataFrame:
     return data
 
 
-def refresh_market_cache(force_refresh: bool = False) -> dict:
+def _download_and_prepare_price_data() -> pd.DataFrame:
+    end_date = datetime.datetime.today()
+    last_error = None
+
+    for attempt in range(1, DOWNLOAD_RETRIES + 1):
+        try:
+            raw = yf.download(
+                TICKERS,
+                start=START_DATE,
+                end=end_date,
+                progress=False,
+                auto_adjust=False,
+                threads=False,
+            )
+
+            return _extract_price_frame(raw)
+
+        except Exception as e:
+            last_error = e
+
+            if attempt < DOWNLOAD_RETRIES:
+                time.sleep(RETRY_SLEEP_SECONDS)
+
+    raise ValueError(f"Failed to download price data after {DOWNLOAD_RETRIES} attempts: {last_error}")
+
+
+def _build_market_state(price_data: pd.DataFrame) -> dict:
+    expected_returns = compute_expected_returns(price_data)
+    cov_matrix = compute_covariance_matrix(price_data)
+    tickers = list(price_data.columns)
+
+    return {
+        "price_data": price_data,
+        "expected_returns": expected_returns,
+        "cov_matrix": cov_matrix,
+        "tickers": tickers,
+    }
+
+
+def _store_cache(price_data: pd.DataFrame, expected_returns, cov_matrix, tickers) -> None:
     global _cached_price_data
     global _cached_expected_returns
     global _cached_cov_matrix
     global _cached_tickers
     global _cache_timestamp
-
-    if not force_refresh and _cached_price_data is not None and _is_cache_valid():
-        return {
-            "price_data": _cached_price_data,
-            "expected_returns": _cached_expected_returns,
-            "cov_matrix": _cached_cov_matrix,
-            "tickers": _cached_tickers,
-            "cache_timestamp": _cache_timestamp,
-        }
-
-    price_data = _download_and_prepare_price_data()
-    expected_returns = compute_expected_returns(price_data)
-    cov_matrix = compute_covariance_matrix(price_data)
-    tickers = list(price_data.columns)
 
     _cached_price_data = price_data
     _cached_expected_returns = expected_returns
@@ -101,13 +119,67 @@ def refresh_market_cache(force_refresh: bool = False) -> dict:
     _cached_tickers = tickers
     _cache_timestamp = datetime.datetime.now()
 
-    return {
-        "price_data": _cached_price_data,
-        "expected_returns": _cached_expected_returns,
-        "cov_matrix": _cached_cov_matrix,
-        "tickers": _cached_tickers,
-        "cache_timestamp": _cache_timestamp,
-    }
+
+def refresh_market_cache(force_refresh: bool = False) -> dict:
+    global _cached_price_data
+    global _cached_expected_returns
+    global _cached_cov_matrix
+    global _cached_tickers
+    global _cache_timestamp
+
+    has_any_cache = (
+        _cached_price_data is not None
+        and _cached_expected_returns is not None
+        and _cached_cov_matrix is not None
+        and _cached_tickers is not None
+        and _cache_timestamp is not None
+    )
+
+    if not force_refresh and has_any_cache and _is_cache_valid():
+        return {
+            "price_data": _cached_price_data,
+            "expected_returns": _cached_expected_returns,
+            "cov_matrix": _cached_cov_matrix,
+            "tickers": _cached_tickers,
+            "cache_timestamp": _cache_timestamp,
+            "cache_status": "fresh",
+        }
+
+    try:
+        price_data = _download_and_prepare_price_data()
+        market_state = _build_market_state(price_data)
+
+        _store_cache(
+            price_data=market_state["price_data"],
+            expected_returns=market_state["expected_returns"],
+            cov_matrix=market_state["cov_matrix"],
+            tickers=market_state["tickers"],
+        )
+
+        return {
+            "price_data": _cached_price_data,
+            "expected_returns": _cached_expected_returns,
+            "cov_matrix": _cached_cov_matrix,
+            "tickers": _cached_tickers,
+            "cache_timestamp": _cache_timestamp,
+            "cache_status": "fresh",
+        }
+
+    except Exception as e:
+        if has_any_cache:
+            return {
+                "price_data": _cached_price_data,
+                "expected_returns": _cached_expected_returns,
+                "cov_matrix": _cached_cov_matrix,
+                "tickers": _cached_tickers,
+                "cache_timestamp": _cache_timestamp,
+                "cache_status": "stale_fallback",
+                "warning": f"Using stale cached market data because refresh failed: {e}",
+            }
+
+        raise ValueError(
+            f"Unable to load market data and no cached data is available. Original error: {e}"
+        )
 
 
 def load_price_data(force_refresh: bool = False) -> pd.DataFrame:
