@@ -39,7 +39,11 @@ frontend_origins = os.getenv(
     "FRONTEND_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000",
 )
-allowed_origins = [origin.strip() for origin in frontend_origins.split(",") if origin.strip()]
+allowed_origins = [
+    origin.strip()
+    for origin in frontend_origins.split(",")
+    if origin.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
