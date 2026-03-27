@@ -35,9 +35,15 @@ from explanation_layer import generate_explanation
 
 app = FastAPI(title="RM Agent API")
 
+frontend_origins = os.getenv(
+    "FRONTEND_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000",
+)
+allowed_origins = [origin.strip() for origin in frontend_origins.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -51,7 +57,10 @@ class PortfolioRequest(BaseModel):
 
 @app.get("/")
 def root():
-    return {"message": "RM Agent API is running"}
+    return {
+        "message": "RM Agent API is running",
+        "allowed_origins": allowed_origins,
+    }
 
 
 @app.get("/cache-status")

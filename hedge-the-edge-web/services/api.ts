@@ -4,7 +4,13 @@ export async function generatePortfolio(payload: {
   target_return: number;
   max_volatility: number | null;
 }): Promise<PortfolioResponse> {
-  const response = await fetch("http://127.0.0.1:8000/portfolio", {
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  if (!apiBaseUrl) {
+    throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured.");
+  }
+
+  const response = await fetch(`${apiBaseUrl}/portfolio`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -15,7 +21,9 @@ export async function generatePortfolio(payload: {
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(data?.detail || `Request failed with status ${response.status}`);
+    throw new Error(
+      data?.detail || `Request failed with status ${response.status}`
+    );
   }
 
   return data as PortfolioResponse;

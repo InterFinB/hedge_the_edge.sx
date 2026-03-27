@@ -526,9 +526,20 @@ export function CategoryExposureChart({
                   />
                 ))}
               </Pie>
-              <Tooltip
-                formatter={(value) => compactTooltipFormatter(value, "%", 2)}
-              />
+                <Tooltip
+                  formatter={(value) => {
+                    const numericValue =
+                      typeof value === "number"
+                        ? value
+                        : typeof value === "string"
+                        ? Number(value)
+                        : NaN;
+
+                    return Number.isFinite(numericValue)
+                      ? `${numericValue.toFixed(2)}%`
+                      : "N/A";
+                  }}
+                />
             </PieChart>
           </ResponsiveContainer>
         </div>
