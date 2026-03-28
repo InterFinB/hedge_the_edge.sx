@@ -87,7 +87,7 @@ function getReadableWarningMessage(warning?: string | null): string {
 }
 
 export default function Home() {
-  const [targetReturnInput, setTargetReturnInput] = useState("10");
+  const [targetReturnInput, setTargetReturnInput] = useState("");
   const [maxVolatilityInput, setMaxVolatilityInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
