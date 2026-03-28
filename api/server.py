@@ -59,6 +59,22 @@ class PortfolioRequest(BaseModel):
     max_volatility: Optional[float] = None
 
 
+def _serialize_market_state(state: dict) -> dict:
+    tickers = state.get("tickers", [])
+    cache_timestamp = state.get("cache_timestamp")
+
+    return {
+        "cache_status": state.get("cache_status", "unknown"),
+        "cache_timestamp": (
+            cache_timestamp.isoformat() if cache_timestamp is not None else None
+        ),
+        "warning": state.get("warning"),
+        "data_metadata": state.get("data_metadata"),
+        "num_assets": len(tickers),
+        "tickers": tickers,
+    }
+
+
 @app.get("/")
 def root():
     return {
@@ -74,14 +90,28 @@ def cache_status():
 
 @app.post("/refresh-data")
 def refresh_data():
-    refreshed = data_loader.force_refresh()
-    return {
-        "message": "Data refreshed",
-        "rows": len(refreshed["price_data"]),
-        "columns": len(refreshed["price_data"].columns),
-        "cache_timestamp": str(refreshed["cache_timestamp"]),
-        "tickers": refreshed.get("tickers", []),
-    }
+    try:
+        refreshed = data_loader.force_refresh()
+
+        return {
+            "message": "Data refresh completed",
+            "rows": len(refreshed["price_data"]),
+            "columns": len(refreshed["price_data"].columns),
+            "market_data": _serialize_market_state(refreshed),
+        }
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Market data refresh failed: {str(e)}",
+        )
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected server error during refresh: {str(e)}",
+        )
 
 
 @app.post("/portfolio")
@@ -210,9 +240,24 @@ def generate_portfolio(request: PortfolioRequest):
             "simulation_summary": sim_summary,
             "simulation_chart": sim_chart,
             "explanation": explanation,
+            "market_data": _serialize_market_state(state),
         }
 
     except ValueError as e:
+        error_text = str(e).lower()
+
+        if (
+            "unable to load market data" in error_text
+            or "failed to download" in error_text
+            or "no cached data is available" in error_text
+            or "price data" in error_text
+            or "yahoo finance" in error_text
+        ):
+            raise HTTPException(
+                status_code=503,
+                detail=f"Market data unavailable: {str(e)}",
+            )
+
         raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
