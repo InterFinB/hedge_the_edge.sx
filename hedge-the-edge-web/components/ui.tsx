@@ -169,6 +169,10 @@ export function PortfolioForm({
             Target return (%)
           </label>
           <input
+            type="text"
+            inputMode="decimal"
+            name="target-return-field"
+            autoComplete="off"
             value={targetReturnInput}
             onChange={(e) => setTargetReturnInput(e.target.value)}
             placeholder="e.g. 10"
@@ -184,6 +188,10 @@ export function PortfolioForm({
             Max volatility (%) — optional
           </label>
           <input
+            type="text"
+            inputMode="decimal"
+            name="max-volatility-field"
+            autoComplete="off"
             value={maxVolatilityInput}
             onChange={(e) => setMaxVolatilityInput(e.target.value)}
             placeholder="e.g. 15"
