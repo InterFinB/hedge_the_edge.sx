@@ -18,12 +18,29 @@ export async function generatePortfolio(payload: {
     body: JSON.stringify(payload),
   });
 
-  const data = await response.json().catch(() => null);
+  const text = await response.text();
+  let data: unknown = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
 
   if (!response.ok) {
-    throw new Error(
-      data?.detail || `Request failed with status ${response.status}`
-    );
+    const detail =
+      data &&
+      typeof data === "object" &&
+      "detail" in data &&
+      typeof (data as { detail?: unknown }).detail === "string"
+        ? (data as { detail: string }).detail
+        : `Request failed with status ${response.status}`;
+
+    throw new Error(detail);
+  }
+
+  if (!data || typeof data !== "object") {
+    throw new Error("Backend returned an invalid response.");
   }
 
   return data as PortfolioResponse;

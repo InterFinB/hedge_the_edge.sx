@@ -49,16 +49,55 @@ function toRiskContributionEntries(
   }));
 }
 
+function getReadableErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return "Unknown error occurred.";
+  }
+
+  const raw = error.message || "Unknown error occurred.";
+  const lower = raw.toLowerCase();
+
+  if (
+    lower.includes("503") ||
+    lower.includes("market data unavailable") ||
+    lower.includes("unable to load market data") ||
+    lower.includes("failed to download") ||
+    lower.includes("no cached data is available")
+  ) {
+    return "Market data is temporarily unavailable. Please try again shortly.";
+  }
+
+  return raw;
+}
+
+function getReadableWarningMessage(warning?: string | null): string {
+  if (!warning) return "";
+
+  const lower = warning.toLowerCase();
+
+  if (lower.includes("stale cached market data")) {
+    return "Using cached market data because live refresh failed.";
+  }
+
+  if (lower.includes("missing")) {
+    return "Some assets were unavailable during the latest market-data refresh.";
+  }
+
+  return warning;
+}
+
 export default function Home() {
   const [targetReturnInput, setTargetReturnInput] = useState("10");
   const [maxVolatilityInput, setMaxVolatilityInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
   const [result, setResult] = useState<PortfolioResponse | null>(null);
 
   const generate = async () => {
     setLoading(true);
     setError("");
+    setWarning("");
     setResult(null);
 
     try {
@@ -75,10 +114,15 @@ export default function Home() {
       });
 
       setResult(data);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Unknown error occurred";
 
+      const backendWarning =
+        typeof data?.market_data?.warning === "string"
+          ? data.market_data.warning
+          : "";
+
+      setWarning(getReadableWarningMessage(backendWarning));
+    } catch (err) {
+      const message = getReadableErrorMessage(err);
       setError(message);
     } finally {
       setLoading(false);
@@ -94,6 +138,7 @@ export default function Home() {
   }, [result]);
 
   const desiredReturn = result?.desired_return ?? result?.target_return;
+  const marketData = result?.market_data;
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#f8fafc_0%,#eef2f7_45%,#e5ebf3_100%)] text-slate-900">
@@ -135,6 +180,36 @@ export default function Home() {
           />
 
           {loading && <LoadingFacts />}
+
+          {warning && !loading && (
+            <div className="rounded-[24px] border border-amber-200 bg-amber-50/90 px-5 py-4 text-sm text-amber-900 shadow-[0_10px_25px_rgba(15,23,42,0.04)]">
+              <div className="font-semibold">Market data notice</div>
+              <p className="mt-1 leading-6">{warning}</p>
+            </div>
+          )}
+
+          {marketData && !loading && !error && (
+            <div className="rounded-[24px] border border-slate-200 bg-white/80 px-5 py-4 text-sm text-slate-700 shadow-[0_10px_25px_rgba(15,23,42,0.04)] backdrop-blur">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6">
+                <div>
+                  <span className="font-semibold text-slate-900">Cache status:</span>{" "}
+                  {marketData.cache_status ?? "unknown"}
+                </div>
+
+                <div>
+                  <span className="font-semibold text-slate-900">Assets available:</span>{" "}
+                  {marketData.num_assets ?? result?.tickers?.length ?? 0}
+                </div>
+
+                {marketData.cache_timestamp && (
+                  <div>
+                    <span className="font-semibold text-slate-900">Updated:</span>{" "}
+                    {marketData.cache_timestamp}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {result && (
             <div className="space-y-4">

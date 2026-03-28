@@ -37,6 +37,24 @@ export type ChartDatum = {
   [key: string]: unknown;
 };
 
+export type MarketDataMetadata = {
+  requested_tickers?: string[];
+  initial_missing_tickers?: string[];
+  recovered_tickers?: string[];
+  final_missing_tickers?: string[];
+  dropped_after_cleaning?: string[];
+  final_tickers?: string[];
+};
+
+export type MarketDataStatus = {
+  cache_status?: "fresh" | "stale_fallback" | "unknown";
+  cache_timestamp?: string | null;
+  warning?: string | null;
+  data_metadata?: MarketDataMetadata | null;
+  num_assets?: number;
+  tickers?: string[];
+};
+
 export type PortfolioResponse = {
   desired_return?: number;
   target_return?: number;
@@ -69,4 +87,5 @@ export type PortfolioResponse = {
   simulation_chart?: unknown;
 
   explanation?: ExplanationBlock;
+  market_data?: MarketDataStatus;
 };
