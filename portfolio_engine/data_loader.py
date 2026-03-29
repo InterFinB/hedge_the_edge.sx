@@ -1,5 +1,8 @@
 import datetime
+import json
+import os
 import time
+from pathlib import Path
 from typing import List, Tuple
 
 import pandas as pd
@@ -15,12 +18,146 @@ _cached_expected_returns = None
 _cached_cov_matrix = None
 _cached_tickers = None
 _cache_timestamp = None
+_cached_data_metadata = None
 
 CACHE_TTL_SECONDS = 3600  # 1 hour
 DOWNLOAD_RETRIES = 3
 RETRY_SLEEP_SECONDS = 5
 MIN_VALID_COLUMN_RATIO = 0.8
 MIN_REQUIRED_ASSETS = 2
+
+CACHE_DIR = Path(os.getenv("MARKET_CACHE_DIR", "./data/market_cache"))
+PRICES_PATH = CACHE_DIR / "prices.parquet"
+EXPECTED_RETURNS_PATH = CACHE_DIR / "expected_returns.parquet"
+COVARIANCE_PATH = CACHE_DIR / "covariance.parquet"
+METADATA_PATH = CACHE_DIR / "metadata.json"
+
+
+def _ensure_cache_dir() -> None:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _has_disk_cache() -> bool:
+    return (
+        PRICES_PATH.exists()
+        and EXPECTED_RETURNS_PATH.exists()
+        and COVARIANCE_PATH.exists()
+        and METADATA_PATH.exists()
+    )
+
+
+def _write_json_atomic(path: Path, payload: dict) -> None:
+    temp_path = path.with_suffix(path.suffix + ".tmp")
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    temp_path.replace(path)
+
+
+def _write_parquet_atomic(df: pd.DataFrame, path: Path) -> None:
+    temp_path = path.with_suffix(path.suffix + ".tmp")
+    df.to_parquet(temp_path)
+    temp_path.replace(path)
+
+
+def _save_cache_to_disk(
+    price_data: pd.DataFrame,
+    expected_returns: pd.Series,
+    cov_matrix: pd.DataFrame,
+    tickers: List[str],
+    cache_timestamp: datetime.datetime,
+    data_metadata: dict | None = None,
+    warning: str | None = None,
+    cache_status: str = "fresh",
+) -> None:
+    _ensure_cache_dir()
+
+    expected_returns_df = expected_returns.to_frame(name="expected_return")
+
+    metadata = {
+        "cache_timestamp": cache_timestamp.isoformat(),
+        "tickers": tickers,
+        "num_assets": len(tickers),
+        "rows": int(price_data.shape[0]),
+        "columns": int(price_data.shape[1]),
+        "cache_status": cache_status,
+        "warning": warning,
+        "start_date": str(START_DATE),
+        "data_metadata": data_metadata or {},
+    }
+
+    _write_parquet_atomic(price_data, PRICES_PATH)
+    _write_parquet_atomic(expected_returns_df, EXPECTED_RETURNS_PATH)
+    _write_parquet_atomic(cov_matrix, COVARIANCE_PATH)
+    _write_json_atomic(METADATA_PATH, metadata)
+
+
+def _load_cache_from_disk() -> dict | None:
+    if not _has_disk_cache():
+        return None
+
+    try:
+        price_data = pd.read_parquet(PRICES_PATH)
+        expected_returns_df = pd.read_parquet(EXPECTED_RETURNS_PATH)
+        cov_matrix = pd.read_parquet(COVARIANCE_PATH)
+
+        with open(METADATA_PATH, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+
+        expected_returns = expected_returns_df["expected_return"]
+        tickers = metadata.get("tickers", list(price_data.columns))
+        cache_timestamp_raw = metadata.get("cache_timestamp")
+        cache_timestamp = (
+            datetime.datetime.fromisoformat(cache_timestamp_raw)
+            if cache_timestamp_raw
+            else None
+        )
+
+        return {
+            "price_data": price_data,
+            "expected_returns": expected_returns,
+            "cov_matrix": cov_matrix,
+            "tickers": tickers,
+            "cache_timestamp": cache_timestamp,
+            "cache_status": metadata.get("cache_status", "disk_loaded"),
+            "warning": metadata.get("warning"),
+            "data_metadata": metadata.get("data_metadata", {}),
+        }
+
+    except Exception:
+        return None
+
+
+def _hydrate_memory_cache_from_disk_if_needed() -> bool:
+    global _cached_price_data
+    global _cached_expected_returns
+    global _cached_cov_matrix
+    global _cached_tickers
+    global _cache_timestamp
+    global _cached_data_metadata
+
+    has_any_cache = (
+        _cached_price_data is not None
+        and _cached_expected_returns is not None
+        and _cached_cov_matrix is not None
+        and _cached_tickers is not None
+        and _cache_timestamp is not None
+    )
+
+    if has_any_cache:
+        return True
+
+    disk_cache = _load_cache_from_disk()
+    if disk_cache is None:
+        return False
+
+    _cached_price_data = disk_cache["price_data"]
+    _cached_expected_returns = disk_cache["expected_returns"]
+    _cached_cov_matrix = disk_cache["cov_matrix"]
+    _cached_tickers = disk_cache["tickers"]
+    _cache_timestamp = disk_cache["cache_timestamp"]
+    _cached_data_metadata = disk_cache.get("data_metadata")
+
+    return True
 
 
 def _is_cache_valid() -> bool:
@@ -34,9 +171,6 @@ def _is_cache_valid() -> bool:
 
 
 def _normalize_to_dataframe(data: pd.DataFrame, requested_tickers: List[str]) -> pd.DataFrame:
-    """
-    Ensures the returned price frame is always a DataFrame whose columns are ticker symbols.
-    """
     if data is None or data.empty:
         raise ValueError("Yahoo Finance returned no data.")
 
@@ -51,10 +185,6 @@ def _normalize_to_dataframe(data: pd.DataFrame, requested_tickers: List[str]) ->
 
 
 def _extract_price_frame(raw: pd.DataFrame, requested_tickers: List[str]) -> pd.DataFrame:
-    """
-    Extracts Adj Close (preferred) or Close from Yahoo response and returns
-    a normalized DataFrame with ticker columns.
-    """
     if raw is None or raw.empty:
         raise ValueError("Yahoo Finance returned no data.")
 
@@ -84,9 +214,6 @@ def _extract_price_frame(raw: pd.DataFrame, requested_tickers: List[str]) -> pd.
 
 
 def _download_raw_prices(requested_tickers: List[str]) -> pd.DataFrame:
-    """
-    Downloads raw Yahoo data with retries.
-    """
     if not requested_tickers:
         raise ValueError("No tickers provided for download.")
 
@@ -131,10 +258,6 @@ def _find_missing_tickers(price_data: pd.DataFrame, requested_tickers: List[str]
 
 
 def _download_missing_tickers_individually(missing_tickers: List[str]) -> pd.DataFrame:
-    """
-    Attempts to recover failed tickers one by one. This helps when Yahoo partially
-    rate-limits a batched request.
-    """
     recovered_frames = []
 
     for ticker in missing_tickers:
@@ -143,7 +266,6 @@ def _download_missing_tickers_individually(missing_tickers: List[str]) -> pd.Dat
             if ticker in single_df.columns:
                 recovered_frames.append(single_df[[ticker]])
         except Exception:
-            # We intentionally skip here; unrecovered tickers will simply remain missing.
             continue
 
     if not recovered_frames:
@@ -169,11 +291,6 @@ def _combine_price_frames(base: pd.DataFrame, recovered: pd.DataFrame) -> pd.Dat
 
 
 def _clean_price_data(price_data: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
-    """
-    Cleans the price frame and returns:
-    - cleaned data
-    - list of dropped tickers
-    """
     if price_data is None or price_data.empty:
         raise ValueError("Price data is empty before cleaning.")
 
@@ -201,11 +318,6 @@ def _clean_price_data(price_data: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]
 
 
 def _download_and_prepare_price_data() -> Tuple[pd.DataFrame, dict]:
-    """
-    Returns:
-    - cleaned price_data
-    - metadata about missing/dropped/recovered tickers
-    """
     requested_tickers = list(TICKERS)
 
     initial_price_data = _download_price_frame(requested_tickers)
@@ -252,18 +364,37 @@ def _build_market_state(price_data: pd.DataFrame, metadata: dict | None = None) 
     return state
 
 
-def _store_cache(price_data: pd.DataFrame, expected_returns, cov_matrix, tickers) -> None:
+def _store_cache(
+    price_data: pd.DataFrame,
+    expected_returns,
+    cov_matrix,
+    tickers,
+    data_metadata: dict | None = None,
+) -> None:
     global _cached_price_data
     global _cached_expected_returns
     global _cached_cov_matrix
     global _cached_tickers
     global _cache_timestamp
+    global _cached_data_metadata
 
     _cached_price_data = price_data
     _cached_expected_returns = expected_returns
     _cached_cov_matrix = cov_matrix
     _cached_tickers = tickers
     _cache_timestamp = datetime.datetime.now()
+    _cached_data_metadata = data_metadata
+
+    _save_cache_to_disk(
+        price_data=price_data,
+        expected_returns=expected_returns,
+        cov_matrix=cov_matrix,
+        tickers=tickers,
+        cache_timestamp=_cache_timestamp,
+        data_metadata=data_metadata,
+        warning=None,
+        cache_status="fresh",
+    )
 
 
 def refresh_market_cache(force_refresh: bool = False) -> dict:
@@ -272,6 +403,9 @@ def refresh_market_cache(force_refresh: bool = False) -> dict:
     global _cached_cov_matrix
     global _cached_tickers
     global _cache_timestamp
+    global _cached_data_metadata
+
+    _hydrate_memory_cache_from_disk_if_needed()
 
     has_any_cache = (
         _cached_price_data is not None
@@ -289,6 +423,7 @@ def refresh_market_cache(force_refresh: bool = False) -> dict:
             "tickers": _cached_tickers,
             "cache_timestamp": _cache_timestamp,
             "cache_status": "fresh",
+            "data_metadata": _cached_data_metadata,
         }
 
     try:
@@ -300,6 +435,7 @@ def refresh_market_cache(force_refresh: bool = False) -> dict:
             expected_returns=market_state["expected_returns"],
             cov_matrix=market_state["cov_matrix"],
             tickers=market_state["tickers"],
+            data_metadata=metadata,
         )
 
         response = {
@@ -309,6 +445,7 @@ def refresh_market_cache(force_refresh: bool = False) -> dict:
             "tickers": _cached_tickers,
             "cache_timestamp": _cache_timestamp,
             "cache_status": "fresh",
+            "data_metadata": metadata,
         }
 
         if metadata["final_missing_tickers"] or metadata["dropped_after_cleaning"]:
@@ -318,7 +455,6 @@ def refresh_market_cache(force_refresh: bool = False) -> dict:
                 f"Dropped after cleaning: {metadata['dropped_after_cleaning']}."
             )
 
-        response["data_metadata"] = metadata
         return response
 
     except Exception as e:
@@ -331,6 +467,7 @@ def refresh_market_cache(force_refresh: bool = False) -> dict:
                 "cache_timestamp": _cache_timestamp,
                 "cache_status": "stale_fallback",
                 "warning": f"Using stale cached market data because refresh failed: {e}",
+                "data_metadata": _cached_data_metadata,
             }
 
         raise ValueError(
@@ -347,11 +484,15 @@ def load_market_state(force_refresh: bool = False) -> dict:
 
 
 def get_cache_status() -> dict:
+    _hydrate_memory_cache_from_disk_if_needed()
+
     return {
         "cache_valid": _is_cache_valid(),
         "cache_timestamp": _cache_timestamp.isoformat() if _cache_timestamp else None,
         "num_assets": len(_cached_tickers) if _cached_tickers is not None else 0,
         "tickers": _cached_tickers if _cached_tickers is not None else [],
+        "cache_dir": str(CACHE_DIR),
+        "disk_cache_present": _has_disk_cache(),
     }
 
 
