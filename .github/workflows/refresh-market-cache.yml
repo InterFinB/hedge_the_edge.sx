@@ -1,0 +1,14 @@
+# .github/workflows/refresh-market-cache.yml
+name: Refresh market cache
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Render refresh endpoint
+        run: curl -f -X POST https://hedge-the-edge-sx.onrender.com/refresh-data
