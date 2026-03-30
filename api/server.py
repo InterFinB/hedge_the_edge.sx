@@ -10,7 +10,9 @@ import traceback
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from portfolio_engine import data_loader
-from portfolio_engine.data_loader import load_market_state
+from portfolio_engine.data_loader import (
+    load_cached_market_state,
+)
 from portfolio_engine.optimizer import (
     optimize_portfolio,
     compute_max_feasible_return,
@@ -117,7 +119,7 @@ def refresh_data():
 @app.post("/portfolio")
 def generate_portfolio(request: PortfolioRequest):
     try:
-        state = load_market_state()
+        state = load_cached_market_state(require_valid=True)
 
         price_data = state["price_data"]
         expected_returns = state["expected_returns"]
@@ -245,6 +247,16 @@ def generate_portfolio(request: PortfolioRequest):
 
     except ValueError as e:
         error_text = str(e).lower()
+
+        if (
+            "no cached market data is available" in error_text
+            or "cached market data is stale" in error_text
+            or "market data not ready" in error_text
+        ):
+            raise HTTPException(
+                status_code=503,
+                detail=str(e),
+            )
 
         if (
             "unable to load market data" in error_text

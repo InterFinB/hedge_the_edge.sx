@@ -486,6 +486,54 @@ def load_market_state(force_refresh: bool = False) -> dict:
     return refresh_market_cache(force_refresh=force_refresh)
 
 
+def load_cached_market_state(require_valid: bool = True) -> dict:
+    """
+    Loads market state from memory/disk cache only.
+    Never triggers a Yahoo refresh.
+
+    If require_valid=True, stale cache is rejected.
+    If require_valid=False, stale cache is allowed.
+    """
+    global _cached_price_data
+    global _cached_expected_returns
+    global _cached_cov_matrix
+    global _cached_tickers
+    global _cache_timestamp
+    global _cached_data_metadata
+
+    _hydrate_memory_cache_from_disk_if_needed()
+
+    has_any_cache = (
+        _cached_price_data is not None
+        and _cached_expected_returns is not None
+        and _cached_cov_matrix is not None
+        and _cached_tickers is not None
+        and _cache_timestamp is not None
+    )
+
+    if not has_any_cache:
+        raise ValueError(
+            "No cached market data is available. Please run /refresh-data first."
+        )
+
+    is_valid = _is_cache_valid()
+    if require_valid and not is_valid:
+        raise ValueError(
+            "Cached market data is stale. Please run /refresh-data before generating a portfolio."
+        )
+
+    return {
+        "price_data": _cached_price_data,
+        "expected_returns": _cached_expected_returns,
+        "cov_matrix": _cached_cov_matrix,
+        "tickers": _cached_tickers,
+        "cache_timestamp": _cache_timestamp,
+        "cache_status": "fresh" if is_valid else "stale_cached",
+        "data_metadata": _cached_data_metadata,
+        "warning": None if is_valid else "Using stale cached market data.",
+    }
+
+
 def get_cache_status() -> dict:
     _hydrate_memory_cache_from_disk_if_needed()
 
