@@ -32,6 +32,9 @@ EXPECTED_RETURNS_PATH = CACHE_DIR / "expected_returns.parquet"
 COVARIANCE_PATH = CACHE_DIR / "covariance.parquet"
 METADATA_PATH = CACHE_DIR / "metadata.json"
 
+print("MARKET_CACHE_DIR env:", os.getenv("MARKET_CACHE_DIR"))
+print("Resolved CACHE_DIR:", CACHE_DIR)
+
 
 def _ensure_cache_dir() -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
