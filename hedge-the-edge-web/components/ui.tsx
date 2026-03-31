@@ -16,32 +16,6 @@ import {
   Area,
 } from "recharts";
 
-const TICKER_NAMES: Record<string, string> = {
-  AAPL: "Apple",
-  MSFT: "Microsoft",
-  NVDA: "Nvidia",
-  JPM: "JPMorgan",
-  BLK: "BlackRock",
-  UNH: "UnitedHealth",
-  ABBV: "AbbVie",
-  WMT: "Walmart",
-  NKE: "Nike",
-  MO: "Altria",
-  CAT: "Caterpillar",
-  GE: "General Electric",
-  AMT: "American Tower",
-  PLD: "Prologis",
-  VNQ: "Vanguard REIT",
-  SLB: "Schlumberger",
-  APD: "Air Products",
-  DBC: "Commodities ETF",
-  EWU: "UK ETF",
-  CSCO: "Cisco",
-  CRM: "Salesforce",
-  MS: "Morgan Stanley",
-  XLF: "Financials ETF",
-};
-
 /* =========================================================
    helpers
 ========================================================= */
@@ -344,6 +318,66 @@ export function PortfolioOverview({ result }: { result: any }) {
 }
 
 /* =========================================================
+   lightweight portfolio status note
+========================================================= */
+
+export function PortfolioStatusNote({
+  universeStatus,
+  marketData,
+}: {
+  universeStatus?: {
+    effective_universe_count?: number;
+    configured_count?: number;
+    dropped_after_cleaning?: string[];
+    final_missing_tickers?: string[];
+    cache_warning?: string | null;
+    refresh_summary?: string | null;
+  };
+  marketData?: {
+    cache_status?: string;
+    warning?: string | null;
+  };
+}) {
+  const dropped = universeStatus?.dropped_after_cleaning || [];
+  const missing = universeStatus?.final_missing_tickers || [];
+  const warning = marketData?.warning || universeStatus?.cache_warning;
+
+  const hasIssue = dropped.length > 0 || missing.length > 0 || !!warning;
+
+  if (!hasIssue) return null;
+
+  return (
+    <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 shadow-sm">
+      <p className="text-sm font-semibold uppercase tracking-wide">
+        Portfolio status
+      </p>
+
+      {warning ? <p className="mt-2 text-sm">{warning}</p> : null}
+
+      {typeof universeStatus?.effective_universe_count === "number" &&
+      typeof universeStatus?.configured_count === "number" ? (
+        <p className="mt-2 text-sm">
+          Active universe: {universeStatus.effective_universe_count} of{" "}
+          {universeStatus.configured_count} configured assets.
+        </p>
+      ) : null}
+
+      {dropped.length > 0 ? (
+        <p className="mt-2 text-sm">
+          Dropped after cleaning: {dropped.join(", ")}.
+        </p>
+      ) : null}
+
+      {missing.length > 0 ? (
+        <p className="mt-2 text-sm">
+          Still missing after recovery: {missing.join(", ")}.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/* =========================================================
    allocation chart
 ========================================================= */
 
@@ -448,36 +482,10 @@ export function AllocationChart({
 ========================================================= */
 
 export function CategoryExposureChart({
-  weights,
+  categoryExposure,
 }: {
-  weights: Record<string, number>;
+  categoryExposure?: { category: string; weight: number; weight_percent?: number }[];
 }) {
-  const TICKER_CATEGORY: Record<string, string> = {
-    AAPL: "Technology",
-    MSFT: "Technology",
-    NVDA: "Technology",
-    CSCO: "Technology",
-    CRM: "Technology",
-    JPM: "Financials",
-    MS: "Financials",
-    BLK: "Financials",
-    XLF: "Financials",
-    UNH: "Healthcare",
-    ABBV: "Healthcare",
-    WMT: "Consumer Defensive",
-    NKE: "Consumer Cyclical",
-    MO: "Consumer Defensive",
-    CAT: "Industrials",
-    GE: "Industrials",
-    AMT: "Real Estate",
-    PLD: "Real Estate",
-    VNQ: "Real Estate",
-    SLB: "Energy",
-    APD: "Materials",
-    DBC: "Commodities",
-    EWU: "International Equity",
-  };
-
   const CATEGORY_COLORS = [
     "#0f766e",
     "#1d4ed8",
@@ -489,21 +497,15 @@ export function CategoryExposureChart({
     "#0891b2",
   ];
 
-  const categoryTotals = Object.entries(weights).reduce<Record<string, number>>(
-    (acc, [ticker, weight]) => {
-      if (weight <= 0.001) return acc;
-      const category = TICKER_CATEGORY[ticker] || "Other";
-      acc[category] = (acc[category] || 0) + weight;
-      return acc;
-    },
-    {}
-  );
-
-  const data = Object.entries(categoryTotals)
-    .map(([name, value]) => ({
-      name,
-      value: Number((value * 100).toFixed(2)),
+  const data = (categoryExposure || [])
+    .map((item) => ({
+      name: item.category,
+      value:
+        typeof item.weight_percent === "number"
+          ? Number(item.weight_percent.toFixed(2))
+          : Number((item.weight * 100).toFixed(2)),
     }))
+    .filter((item) => item.value > 0)
     .sort((a, b) => b.value - a.value);
 
   if (data.length === 0) return null;
@@ -534,20 +536,20 @@ export function CategoryExposureChart({
                   />
                 ))}
               </Pie>
-                <Tooltip
-                  formatter={(value) => {
-                    const numericValue =
-                      typeof value === "number"
-                        ? value
-                        : typeof value === "string"
-                        ? Number(value)
-                        : NaN;
+              <Tooltip
+                formatter={(value) => {
+                  const numericValue =
+                    typeof value === "number"
+                      ? value
+                      : typeof value === "string"
+                      ? Number(value)
+                      : NaN;
 
-                    return Number.isFinite(numericValue)
-                      ? `${numericValue.toFixed(2)}%`
-                      : "N/A";
-                  }}
-                />
+                  return Number.isFinite(numericValue)
+                    ? `${numericValue.toFixed(2)}%`
+                    : "N/A";
+                }}
+              />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -576,6 +578,65 @@ export function CategoryExposureChart({
             </div>
           ))}
         </div>
+      </div>
+    </Box>
+  );
+}
+
+/* =========================================================
+   backend-ranked top positions
+========================================================= */
+
+export function TopPositionsPanel({
+  topPositions,
+}: {
+  topPositions?: {
+    ticker: string;
+    name?: string;
+    category?: string;
+    weight: number;
+    weight_percent?: number;
+  }[];
+}) {
+  const rows = (topPositions || []).filter((x) => x.weight > 0);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <Box
+      title="Top positions"
+      rightSlot={
+        <span className="text-xs text-slate-400">backend-ranked</span>
+      }
+    >
+      <div className="space-y-2">
+        {rows.map((item, index) => (
+          <div
+            key={`${item.ticker}-${index}`}
+            className="grid grid-cols-[28px_minmax(0,1fr)_90px] items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-3"
+          >
+            <span className="text-xs font-medium text-slate-500">
+              {index + 1}
+            </span>
+
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium text-slate-900">
+                {item.ticker} ({item.name || item.ticker})
+              </div>
+              {item.category ? (
+                <div className="mt-0.5 truncate text-xs text-slate-500">
+                  {item.category}
+                </div>
+              ) : null}
+            </div>
+
+            <span className="text-right text-sm font-semibold text-slate-900">
+              {typeof item.weight_percent === "number"
+                ? `${item.weight_percent.toFixed(2)}%`
+                : pct(item.weight)}
+            </span>
+          </div>
+        ))}
       </div>
     </Box>
   );
@@ -912,6 +973,7 @@ function extractMetricChips(items: string[]) {
     .replace(/Target return:\s*[\d.]+%\.\s*/i, "")
     .replace(/Expected return:\s*[\d.]+%\.\s*/i, "")
     .replace(/Volatility:\s*[\d.]+%\.\s*/i, "")
+    .replace(/\s{2,}/g, " ")
     .trim();
 
   const rest =

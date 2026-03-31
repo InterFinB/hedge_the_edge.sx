@@ -7,8 +7,10 @@ import {
   LoadingFacts,
   StatusBanner,
   PortfolioOverview,
+  PortfolioStatusNote,
   AllocationChart,
   CategoryExposureChart,
+  TopPositionsPanel,
   RiskContributionChart,
   SimulationDistributionChart,
   SimulationSummary,
@@ -222,40 +224,49 @@ export default function Home() {
 
               <PortfolioOverview result={result} />
 
+              <PortfolioStatusNote
+                universeStatus={result.universe_status}
+                marketData={result.market_data}
+              />
+
               <section className="grid gap-4 xl:grid-cols-2">
                 <AllocationChart
                   weights={result.weights}
                   tickerToName={result.ticker_to_name}
                 />
-                <CategoryExposureChart weights={result.weights} />
+                <CategoryExposureChart
+                  categoryExposure={result.category_exposure}
+                />
               </section>
 
               <section className="grid gap-4 xl:grid-cols-2">
+                <TopPositionsPanel topPositions={result.top_positions} />
                 <RiskContributionChart
                   riskContributions={riskContributionEntries}
                 />
+              </section>
+
+              <section className="grid gap-4 xl:grid-cols-2">
                 <SimulationDistributionChart
                   simulationChart={result.simulation_chart}
                 />
+                <SimulationSummary result={result} />
               </section>
+
+              <ExplanationSection explanation={result.explanation} />
 
               <section className="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
                 <WeightsTable
                   weights={result.weights}
                   tickerToName={result.ticker_to_name}
                 />
-                <div className="grid gap-4">
-                  <SimulationSummary result={result} />
-                  <DiagnosticsPanel
-                    concentration={result.concentration}
-                    diversificationRatio={result.diversification_ratio}
-                    meaningfulPositionsCount={result.meaningful_positions?.length}
-                    topRiskContributions={riskContributionEntries}
-                  />
-                </div>
+                <DiagnosticsPanel
+                  concentration={result.concentration}
+                  diversificationRatio={result.diversification_ratio}
+                  meaningfulPositionsCount={result.meaningful_positions?.length}
+                  topRiskContributions={riskContributionEntries}
+                />
               </section>
-
-              <ExplanationSection explanation={result.explanation} />
             </div>
           )}
         </div>
