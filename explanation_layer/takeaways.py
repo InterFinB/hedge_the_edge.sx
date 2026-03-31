@@ -51,7 +51,7 @@ def generate_takeaways(
     # 2. Dynamic risk concentration summary
     if profile == "single_name_dominant" and top:
         bullets.append(
-            f"{format_asset_label(top[0][0])} is currently the single largest driver of portfolio risk."
+            f"Risk is currently most sensitive to movements in {format_asset_label(top[0][0])}."
         )
     elif profile == "top_two_concentrated" and len(top) >= 2:
         bullets.append(

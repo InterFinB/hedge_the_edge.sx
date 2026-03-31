@@ -73,7 +73,7 @@ def generate_watch_for(
         )
     elif downside_level == "moderate":
         bullets.append(
-            "Watch downside conditions: modeled loss probability is not extreme, but it is high enough to matter in weaker markets."
+            "Watch downside conditions: if loss probability rises further, the portfolio may require more frequent rebalancing to maintain the target return."
         )
     elif downside_level == "low":
         bullets.append(
@@ -97,7 +97,7 @@ def generate_watch_for(
         )
     elif dispersion_level == "moderate":
         bullets.append(
-            "Watch scenario sensitivity: the simulation range still implies meaningful uncertainty around expected outcomes."
+            "Watch scenario sensitivity: wider dispersion means realized returns may deviate more from expectations, especially in unstable markets."
         )
 
     # 6. Volatility-cap awareness
@@ -111,7 +111,7 @@ def generate_watch_for(
     if portfolio_volatility is not None:
         schedule = get_recompute_schedule(portfolio_volatility)
         bullets.append(
-            f"Watch for drift between recomputations: at the current volatility regime, the portfolio should be reviewed on roughly a {schedule.interval_label} cadence."
+            f"Watch for drift between recomputations: changes in volatility or correlations can gradually shift the portfolio away from its optimal structure."
         )
 
     if not bullets:
