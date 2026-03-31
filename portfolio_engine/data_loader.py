@@ -25,6 +25,7 @@ DOWNLOAD_RETRIES = 3
 RETRY_SLEEP_SECONDS = 5
 MIN_VALID_COLUMN_RATIO = 0.8
 MIN_REQUIRED_ASSETS = 2
+MIN_REFRESH_SURVIVING_ASSETS = 225
 
 CACHE_DIR = Path(os.getenv("MARKET_CACHE_DIR", "./data/market_cache"))
 PRICES_PATH = CACHE_DIR / "prices.parquet"
@@ -96,6 +97,48 @@ def _build_metadata_summary(metadata: dict | None) -> str | None:
         f"{final_missing_count or 0} still missing, "
         f"{dropped_count or 0} dropped after cleaning"
     )
+
+
+def _validate_market_state_for_cache(
+    price_data: pd.DataFrame,
+    expected_returns: pd.Series,
+    cov_matrix: pd.DataFrame,
+    tickers: List[str],
+) -> tuple[bool, str | None]:
+    if price_data is None or price_data.empty:
+        return False, "Refreshed price data is empty."
+
+    if len(tickers) < MIN_REFRESH_SURVIVING_ASSETS:
+        return (
+            False,
+            f"Refreshed universe too small for cache overwrite. "
+            f"Need at least {MIN_REFRESH_SURVIVING_ASSETS} surviving assets, got {len(tickers)}.",
+        )
+
+    if expected_returns is None or len(expected_returns) != len(tickers):
+        return (
+            False,
+            f"Expected returns length mismatch. "
+            f"Expected {len(tickers)}, got {0 if expected_returns is None else len(expected_returns)}.",
+        )
+
+    if cov_matrix is None or cov_matrix.empty:
+        return False, "Covariance matrix is empty."
+
+    if cov_matrix.shape != (len(tickers), len(tickers)):
+        return (
+            False,
+            f"Covariance matrix shape mismatch. "
+            f"Expected {(len(tickers), len(tickers))}, got {cov_matrix.shape}.",
+        )
+
+    if list(expected_returns.index) != tickers:
+        return False, "Expected returns index does not align with ticker order."
+
+    if list(cov_matrix.index) != tickers or list(cov_matrix.columns) != tickers:
+        return False, "Covariance matrix indices/columns do not align with ticker order."
+
+    return True, None
 
 
 def _save_cache_to_disk(
@@ -559,10 +602,50 @@ def refresh_market_cache(force_refresh: bool = False) -> dict:
         price_data, metadata = _download_and_prepare_price_data()
         market_state = _build_market_state(price_data, metadata=metadata)
 
+        is_healthy, validation_error = _validate_market_state_for_cache(
+            price_data=market_state["price_data"],
+            expected_returns=market_state["expected_returns"],
+            cov_matrix=market_state["cov_matrix"],
+            tickers=market_state["tickers"],
+        )
+
+        metadata.setdefault("validation", {})
+        metadata["validation"]["cache_overwrite_allowed"] = is_healthy
+        metadata["validation"]["cache_overwrite_error"] = validation_error
+
         metadata.setdefault("timings", {})
         metadata["timings"]["total_refresh_seconds"] = _round_seconds(
             time.perf_counter() - refresh_total_start
         )
+
+        if not is_healthy:
+            if has_any_cache:
+                fallback_metadata = dict(_cached_data_metadata or {})
+                fallback_metadata["cache_age_seconds"] = _seconds_since(_cache_timestamp)
+                fallback_metadata["summary"] = (
+                    fallback_metadata.get("summary")
+                    or _build_metadata_summary(fallback_metadata)
+                )
+
+                return {
+                    "price_data": _cached_price_data,
+                    "expected_returns": _cached_expected_returns,
+                    "cov_matrix": _cached_cov_matrix,
+                    "tickers": _cached_tickers,
+                    "cache_timestamp": _cache_timestamp,
+                    "cache_status": "stale_fallback",
+                    "warning": (
+                        "Refreshed market data failed validation, so existing cache was kept. "
+                        f"Reason: {validation_error}"
+                    ),
+                    "data_metadata": fallback_metadata,
+                    "refresh_validation": metadata.get("validation"),
+                }
+
+            raise ValueError(
+                f"Refreshed market data failed validation and no existing cache is available. "
+                f"Reason: {validation_error}"
+            )
 
         _store_cache(
             price_data=market_state["price_data"],
@@ -587,6 +670,7 @@ def refresh_market_cache(force_refresh: bool = False) -> dict:
             "cache_timestamp": _cache_timestamp,
             "cache_status": "fresh",
             "data_metadata": response_metadata,
+            "refresh_validation": metadata.get("validation"),
         }
 
         if response_metadata.get("final_missing_tickers") or response_metadata.get(

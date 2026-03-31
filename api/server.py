@@ -133,7 +133,7 @@ def refresh_data():
 @app.post("/portfolio")
 def generate_portfolio(request: PortfolioRequest):
     try:
-        state = load_cached_market_state(require_valid=True)
+        state = load_cached_market_state(require_valid=False)
 
         price_data = state["price_data"]
         expected_returns = state["expected_returns"]
@@ -264,7 +264,6 @@ def generate_portfolio(request: PortfolioRequest):
 
         if (
             "no cached market data is available" in error_text
-            or "cached market data is stale" in error_text
             or "market data not ready" in error_text
         ):
             raise HTTPException(
