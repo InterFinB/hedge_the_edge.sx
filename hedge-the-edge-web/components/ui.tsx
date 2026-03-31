@@ -1113,7 +1113,7 @@ export function ExplanationSection({ explanation }: { explanation: any }) {
     overview: summaryBody.length + chips.length,
     risk: riskCommentary.length,
     simulation: simulationCommentary.length,
-    actions: watch.length + takeaways.length,
+    actions: Math.max(watch.length, 2) + takeaways.length,
     vocabulary: vocabularyEntries.length,
   };
 
@@ -1240,22 +1240,27 @@ export function ExplanationSection({ explanation }: { explanation: any }) {
                   Watch for
                 </h3>
 
-                {watch.length > 0 ? (
-                  <div className="mt-3 space-y-3">
-                    {watch.map((item, i) => (
+                <div className="mt-3 space-y-3">
+                  {watch.length > 0 ? (
+                    watch.map((item, i) => (
                       <div
                         key={i}
                         className="rounded-xl border border-amber-200 bg-white/75 px-4 py-3 text-sm leading-6 text-slate-700"
                       >
                         {item}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-sm text-slate-500">
-                    No watch-for items available.
-                  </p>
-                )}
+                    ))
+                  ) : (
+                    <>
+                      <div className="rounded-xl border border-amber-200 bg-white/75 px-4 py-3 text-sm leading-6 text-slate-700">
+                        Monitor changes in the largest positions, as they can shift the portfolio’s risk profile.
+                      </div>
+                      <div className="rounded-xl border border-amber-200 bg-white/75 px-4 py-3 text-sm leading-6 text-slate-700">
+                        Watch for increases in volatility or downside probability in the simulation results.
+                      </div>
+                    </>
+                  )}
+                </div>
               </section>
 
               <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
