@@ -145,7 +145,6 @@ ASSET_UNIVERSE = [
     {"ticker": "CB", "name": "Chubb", "category": "Financial Stocks"},
     {"ticker": "USB", "name": "U.S. Bancorp", "category": "Financial Stocks"},
     {"ticker": "TFC", "name": "Truist Financial", "category": "Financial Stocks"},
-    {"ticker": "MMC", "name": "Marsh & McLennan", "category": "Financial Stocks"},
     {"ticker": "SPGI", "name": "S&P Global", "category": "Financial Stocks"},
     {"ticker": "MCO", "name": "Moody's", "category": "Financial Stocks"},
     {"ticker": "C", "name": "Citigroup", "category": "Financial Stocks"},

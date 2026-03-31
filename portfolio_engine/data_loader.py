@@ -32,6 +32,11 @@ PRICES_PATH = CACHE_DIR / "prices.parquet"
 EXPECTED_RETURNS_PATH = CACHE_DIR / "expected_returns.parquet"
 COVARIANCE_PATH = CACHE_DIR / "covariance.parquet"
 METADATA_PATH = CACHE_DIR / "metadata.json"
+WEAK_TICKER_STATS_PATH = CACHE_DIR / "weak_ticker_stats.json"
+
+AUTO_PRUNE_CONSECUTIVE_FAILURES = 3
+AUTO_PRUNE_TOTAL_FAILURES = 4
+AUTO_PRUNE_MIN_OBSERVATIONS = 6
 
 print("MARKET_CACHE_DIR env:", os.getenv("MARKET_CACHE_DIR"))
 print("Resolved CACHE_DIR:", CACHE_DIR)
@@ -63,6 +68,137 @@ def _write_parquet_atomic(df: pd.DataFrame, path: Path) -> None:
     temp_path.replace(path)
 
 
+def _load_weak_ticker_stats() -> dict:
+    if not WEAK_TICKER_STATS_PATH.exists():
+        return {}
+
+    try:
+        with open(WEAK_TICKER_STATS_PATH, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_weak_ticker_stats(stats: dict) -> None:
+    _ensure_cache_dir()
+    _write_json_atomic(WEAK_TICKER_STATS_PATH, stats)
+
+
+def _get_effective_requested_tickers(
+    requested_tickers: List[str],
+) -> tuple[List[str], List[str], dict]:
+    stats = _load_weak_ticker_stats()
+
+    auto_pruned = []
+    effective = []
+
+    for ticker in requested_tickers:
+        ticker_stats = stats.get(ticker, {})
+        if ticker_stats.get("auto_pruned", False):
+            auto_pruned.append(ticker)
+        else:
+            effective.append(ticker)
+
+    return effective, auto_pruned, stats
+
+
+def _should_auto_prune_ticker(ticker_stats: dict) -> bool:
+    consecutive_failures = int(ticker_stats.get("consecutive_failures", 0))
+    total_failures = int(ticker_stats.get("total_failures", 0))
+    total_observations = int(ticker_stats.get("total_observations", 0))
+
+    if consecutive_failures >= AUTO_PRUNE_CONSECUTIVE_FAILURES:
+        return True
+
+    if (
+        total_observations >= AUTO_PRUNE_MIN_OBSERVATIONS
+        and total_failures >= AUTO_PRUNE_TOTAL_FAILURES
+    ):
+        return True
+
+    return False
+
+
+def _update_weak_ticker_stats(
+    requested_tickers: List[str],
+    final_tickers: List[str],
+    final_missing_tickers: List[str],
+    dropped_after_cleaning: List[str],
+    auto_pruned_tickers: List[str],
+) -> dict:
+    stats = _load_weak_ticker_stats()
+    final_ticker_set = set(final_tickers)
+    final_missing_set = set(final_missing_tickers)
+    dropped_set = set(dropped_after_cleaning)
+
+    newly_auto_pruned = []
+
+    for ticker in requested_tickers:
+        ticker_stats = stats.get(
+            ticker,
+            {
+                "total_observations": 0,
+                "total_failures": 0,
+                "consecutive_failures": 0,
+                "survived_runs": 0,
+                "missing_runs": 0,
+                "dropped_runs": 0,
+                "auto_pruned": False,
+                "last_status": None,
+                "last_failure_reason": None,
+            },
+        )
+
+        if ticker in auto_pruned_tickers:
+            ticker_stats["last_status"] = "auto_pruned"
+            stats[ticker] = ticker_stats
+            continue
+
+        ticker_stats["total_observations"] += 1
+
+        if ticker in final_missing_set:
+            ticker_stats["total_failures"] += 1
+            ticker_stats["consecutive_failures"] += 1
+            ticker_stats["missing_runs"] += 1
+            ticker_stats["last_status"] = "missing"
+            ticker_stats["last_failure_reason"] = "missing_after_recovery"
+
+        elif ticker in dropped_set:
+            ticker_stats["total_failures"] += 1
+            ticker_stats["consecutive_failures"] += 1
+            ticker_stats["dropped_runs"] += 1
+            ticker_stats["last_status"] = "dropped"
+            ticker_stats["last_failure_reason"] = "dropped_after_cleaning"
+
+        elif ticker in final_ticker_set:
+            ticker_stats["survived_runs"] += 1
+            ticker_stats["consecutive_failures"] = 0
+            ticker_stats["last_status"] = "survived"
+            ticker_stats["last_failure_reason"] = None
+
+        if (
+            not ticker_stats.get("auto_pruned", False)
+            and _should_auto_prune_ticker(ticker_stats)
+        ):
+            ticker_stats["auto_pruned"] = True
+            newly_auto_pruned.append(ticker)
+
+        stats[ticker] = ticker_stats
+
+    _save_weak_ticker_stats(stats)
+
+    return {
+        "stats": stats,
+        "newly_auto_pruned_tickers": newly_auto_pruned,
+        "currently_auto_pruned_tickers": [
+            ticker
+            for ticker, ticker_stats in stats.items()
+            if ticker_stats.get("auto_pruned", False)
+        ],
+    }
+
+
 def _now() -> datetime.datetime:
     return datetime.datetime.now()
 
@@ -81,6 +217,8 @@ def _build_metadata_summary(metadata: dict | None) -> str | None:
     if not metadata:
         return None
 
+    configured_count = metadata.get("configured_count")
+    auto_pruned_count = metadata.get("auto_pruned_count", 0)
     requested_count = metadata.get("requested_count")
     surviving_count = metadata.get("surviving_count")
     recovered_count = metadata.get("recovered_count")
@@ -90,7 +228,15 @@ def _build_metadata_summary(metadata: dict | None) -> str | None:
     if requested_count is None or surviving_count is None:
         return None
 
+    prefix = ""
+    if configured_count is not None:
+        prefix = (
+            f"{configured_count} configured, "
+            f"{auto_pruned_count} auto-pruned, "
+        )
+
     return (
+        f"{prefix}"
         f"{requested_count} requested, "
         f"{surviving_count} survived, "
         f"{recovered_count or 0} recovered, "
@@ -423,7 +569,17 @@ def _clean_price_data(price_data: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]
 
 
 def _download_and_prepare_price_data() -> Tuple[pd.DataFrame, dict]:
-    requested_tickers = list(TICKERS)
+    configured_tickers = list(TICKERS)
+    requested_tickers, auto_pruned_tickers, weak_ticker_stats = _get_effective_requested_tickers(
+        configured_tickers
+    )
+
+    if not requested_tickers:
+        raise ValueError(
+            "All configured tickers are currently auto-pruned. "
+            "Review weak ticker stats before refreshing again."
+        )
+
     refresh_start = time.perf_counter()
 
     batch_download_start = time.perf_counter()
@@ -460,7 +616,19 @@ def _download_and_prepare_price_data() -> Tuple[pd.DataFrame, dict]:
         ticker for ticker in missing_after_batch if ticker in recovered_data.columns
     ]
 
+    weak_ticker_result = _update_weak_ticker_stats(
+        requested_tickers=requested_tickers,
+        final_tickers=list(cleaned_price_data.columns),
+        final_missing_tickers=still_missing,
+        dropped_after_cleaning=dropped_after_cleaning,
+        auto_pruned_tickers=auto_pruned_tickers,
+    )
+
     metadata = {
+        "configured_tickers": configured_tickers,
+        "configured_count": len(configured_tickers),
+        "auto_pruned_tickers": auto_pruned_tickers,
+        "auto_pruned_count": len(auto_pruned_tickers),
         "requested_tickers": requested_tickers,
         "requested_count": len(requested_tickers),
         "initial_missing_tickers": missing_after_batch,
@@ -476,6 +644,8 @@ def _download_and_prepare_price_data() -> Tuple[pd.DataFrame, dict]:
         "surviving_count": int(cleaned_price_data.shape[1]),
         "price_rows": int(cleaned_price_data.shape[0]),
         "price_columns": int(cleaned_price_data.shape[1]),
+        "newly_auto_pruned_tickers": weak_ticker_result["newly_auto_pruned_tickers"],
+        "currently_auto_pruned_tickers": weak_ticker_result["currently_auto_pruned_tickers"],
         "timings": {
             "batch_download_seconds": batch_download_seconds,
             "individual_recovery_seconds": individual_recovery_seconds,
@@ -682,6 +852,13 @@ def refresh_market_cache(force_refresh: bool = False) -> dict:
                 f"Dropped after cleaning: {response_metadata.get('dropped_after_cleaning', [])}."
             )
 
+        if response_metadata.get("newly_auto_pruned_tickers"):
+            auto_pruned_warning = (
+                f" Newly auto-pruned tickers: {response_metadata.get('newly_auto_pruned_tickers', [])}."
+            )
+            response["warning"] = (response.get("warning") or "") + auto_pruned_warning
+            response["warning"] = response["warning"].strip()
+
         return response
 
     except Exception as e:
@@ -784,6 +961,35 @@ def get_cache_status() -> dict:
         "disk_cache_present": _has_disk_cache(),
         "data_summary": metadata.get("summary"),
         "data_metadata": metadata,
+    }
+
+
+def get_weak_ticker_status() -> dict:
+    stats = _load_weak_ticker_stats()
+
+    auto_pruned = {
+        ticker: ticker_stats
+        for ticker, ticker_stats in stats.items()
+        if ticker_stats.get("auto_pruned", False)
+    }
+
+    weak_candidates = {
+        ticker: ticker_stats
+        for ticker, ticker_stats in stats.items()
+        if (
+            not ticker_stats.get("auto_pruned", False)
+            and (
+                ticker_stats.get("consecutive_failures", 0) > 0
+                or ticker_stats.get("total_failures", 0) > 0
+            )
+        )
+    }
+
+    return {
+        "auto_pruned_count": len(auto_pruned),
+        "auto_pruned_tickers": auto_pruned,
+        "weak_candidate_count": len(weak_candidates),
+        "weak_candidates": weak_candidates,
     }
 
 

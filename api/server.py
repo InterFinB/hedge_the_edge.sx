@@ -87,6 +87,7 @@ def _serialize_refresh_result(refreshed: dict) -> dict:
         "columns": len(price_data.columns),
         "summary": metadata.get("summary"),
         "market_data": _serialize_market_state(refreshed),
+        "refresh_validation": refreshed.get("refresh_validation"),
     }
 
 
@@ -107,6 +108,18 @@ def cache_status():
         raise HTTPException(
             status_code=500,
             detail=f"Unable to read cache status: {str(e)}",
+        )
+
+
+@app.get("/weak-tickers")
+def weak_tickers():
+    try:
+        return data_loader.get_weak_ticker_status()
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to read weak ticker status: {str(e)}",
         )
 
 
