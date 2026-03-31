@@ -15,9 +15,11 @@ from portfolio_engine.config import (
 
 WEIGHT_BOUNDS = (MIN_WEIGHT_BOUND, MAX_WEIGHT_BOUND)
 
-# Practical minimum meaningful portfolio weight:
-# assets below this threshold are pruned after optimization.
-MIN_MEANINGFUL_WEIGHT = 0.015
+# Portfolio concentration settings
+CONCENTRATION_MIN_WEIGHT = 0.025
+CONCENTRATION_FALLBACK_MIN_WEIGHT = 0.02
+CONCENTRATION_MIN_ASSETS = 8
+CONCENTRATION_MAX_ASSETS = 20
 
 
 def compute_max_feasible_return(
@@ -65,7 +67,7 @@ def _solve_portfolio_problem(
     cov: pd.DataFrame,
     target_return: float | None = None,
     max_volatility: float | None = None,
-) -> dict:
+) -> dict[str, float]:
     assets = list(mu.index)
     n_assets = len(assets)
 
@@ -119,36 +121,7 @@ def _solve_portfolio_problem(
     if abs(weight_sum) > 1e-12:
         weights = weights / weight_sum
 
-    return {
-        asset: float(weight)
-        for asset, weight in zip(assets, weights)
-    }
-
-
-def _prune_and_renormalize(
-    weights_dict: dict[str, float],
-    min_meaningful_weight: float = MIN_MEANINGFUL_WEIGHT,
-) -> dict[str, float]:
-    pruned = {
-        asset: weight
-        for asset, weight in weights_dict.items()
-        if weight >= min_meaningful_weight
-    }
-
-    if not pruned:
-        largest_asset = max(weights_dict, key=weights_dict.get)
-        pruned = {largest_asset: weights_dict[largest_asset]}
-
-    total = sum(pruned.values())
-    if total <= 1e-12:
-        raise ValueError("All portfolio weights were removed during pruning.")
-
-    normalized = {
-        asset: weight / total
-        for asset, weight in pruned.items()
-    }
-
-    return normalized
+    return {asset: float(weight) for asset, weight in zip(assets, weights)}
 
 
 def _round_weights(weights_dict: dict[str, float]) -> dict[str, float]:
@@ -156,6 +129,71 @@ def _round_weights(weights_dict: dict[str, float]) -> dict[str, float]:
         asset: round(float(weight), 8)
         for asset, weight in weights_dict.items()
     }
+
+
+def concentrate_weights(
+    weights_dict: dict[str, float],
+    min_weight: float = CONCENTRATION_MIN_WEIGHT,
+    fallback_min_weight: float = CONCENTRATION_FALLBACK_MIN_WEIGHT,
+    min_assets: int = CONCENTRATION_MIN_ASSETS,
+    max_assets: int = CONCENTRATION_MAX_ASSETS,
+) -> tuple[dict[str, float], dict[str, float | int]]:
+    positive = {
+        asset: float(weight)
+        for asset, weight in weights_dict.items()
+        if float(weight) > 0
+    }
+
+    pre_prune_assets = len(positive)
+
+    filtered = {
+        asset: weight
+        for asset, weight in positive.items()
+        if weight >= min_weight
+    }
+    threshold_used = min_weight
+
+    if len(filtered) < min_assets:
+        filtered = {
+            asset: weight
+            for asset, weight in positive.items()
+            if weight >= fallback_min_weight
+        }
+        threshold_used = fallback_min_weight
+
+    if not filtered:
+        largest_asset = max(positive, key=positive.get)
+        filtered = {largest_asset: positive[largest_asset]}
+        threshold_used = fallback_min_weight
+
+    capped = False
+    if len(filtered) > max_assets:
+        filtered = dict(
+            sorted(filtered.items(), key=lambda x: x[1], reverse=True)[:max_assets]
+        )
+        capped = True
+
+    total = sum(filtered.values())
+    if total <= 1e-12:
+        raise ValueError("All portfolio weights were removed during concentration.")
+
+    normalized = {
+        asset: weight / total
+        for asset, weight in filtered.items()
+    }
+
+    diagnostics = {
+        "pre_prune_assets": pre_prune_assets,
+        "post_prune_assets": len(normalized),
+        "concentration_min_weight": float(min_weight),
+        "concentration_fallback_min_weight": float(fallback_min_weight),
+        "concentration_threshold_used": float(threshold_used),
+        "concentration_min_assets": int(min_assets),
+        "concentration_max_assets": int(max_assets),
+        "concentration_capped": int(capped),
+    }
+
+    return normalized, diagnostics
 
 
 def compute_max_feasible_return_for_subset(
@@ -177,7 +215,8 @@ def optimize_min_variance_portfolio(
     expected_returns: pd.Series | None = None,
     cov_matrix: pd.DataFrame | None = None,
     asset_subset: list[str] | None = None,
-) -> dict:
+    return_diagnostics: bool = False,
+) -> dict | tuple[dict, dict]:
     mu = expected_returns if expected_returns is not None else compute_expected_returns(price_data)
     cov = cov_matrix if cov_matrix is not None else compute_covariance_matrix(price_data)
 
@@ -209,11 +248,12 @@ def optimize_min_variance_portfolio(
         max_volatility=None,
     )
 
-    pruned_weights = _prune_and_renormalize(raw_weights, MIN_MEANINGFUL_WEIGHT)
-    surviving_assets = list(pruned_weights.keys())
+    concentrated_weights, concentration_diagnostics = concentrate_weights(raw_weights)
+    surviving_assets = list(concentrated_weights.keys())
 
     if len(surviving_assets) < 2:
-        return _round_weights(pruned_weights)
+        result = _round_weights(concentrated_weights)
+        return (result, concentration_diagnostics) if return_diagnostics else result
 
     mu_refined = mu.loc[surviving_assets]
     cov_refined = cov.loc[surviving_assets, surviving_assets]
@@ -225,8 +265,9 @@ def optimize_min_variance_portfolio(
         max_volatility=None,
     )
 
-    refined_pruned = _prune_and_renormalize(refined_weights, MIN_MEANINGFUL_WEIGHT)
-    return _round_weights(refined_pruned)
+    refined_concentrated, refined_diagnostics = concentrate_weights(refined_weights)
+    result = _round_weights(refined_concentrated)
+    return (result, refined_diagnostics) if return_diagnostics else result
 
 
 def optimize_portfolio(
@@ -236,7 +277,8 @@ def optimize_portfolio(
     expected_returns: pd.Series | None = None,
     cov_matrix: pd.DataFrame | None = None,
     asset_subset: list[str] | None = None,
-) -> dict:
+    return_diagnostics: bool = False,
+) -> dict | tuple[dict, dict]:
     mu = expected_returns if expected_returns is not None else compute_expected_returns(price_data)
     cov = cov_matrix if cov_matrix is not None else compute_covariance_matrix(price_data)
 
@@ -288,11 +330,12 @@ def optimize_portfolio(
             )
         raise ValueError("Portfolio optimization failed under the current constraints.")
 
-    pruned_weights = _prune_and_renormalize(raw_weights, MIN_MEANINGFUL_WEIGHT)
-    surviving_assets = list(pruned_weights.keys())
+    concentrated_weights, concentration_diagnostics = concentrate_weights(raw_weights)
+    surviving_assets = list(concentrated_weights.keys())
 
     if len(surviving_assets) < 2:
-        return _round_weights(pruned_weights)
+        result = _round_weights(concentrated_weights)
+        return (result, concentration_diagnostics) if return_diagnostics else result
 
     mu_refined = mu.loc[surviving_assets]
     cov_refined = cov.loc[surviving_assets, surviving_assets]
@@ -305,7 +348,8 @@ def optimize_portfolio(
     )
 
     if target_return > refined_max_feasible_return:
-        return _round_weights(pruned_weights)
+        result = _round_weights(concentrated_weights)
+        return (result, concentration_diagnostics) if return_diagnostics else result
 
     try:
         refined_weights = _solve_portfolio_problem(
@@ -315,8 +359,10 @@ def optimize_portfolio(
             max_volatility=max_volatility,
         )
 
-        refined_pruned = _prune_and_renormalize(refined_weights, MIN_MEANINGFUL_WEIGHT)
-        return _round_weights(refined_pruned)
+        refined_concentrated, refined_diagnostics = concentrate_weights(refined_weights)
+        result = _round_weights(refined_concentrated)
+        return (result, refined_diagnostics) if return_diagnostics else result
 
     except ValueError:
-        return _round_weights(pruned_weights)
+        result = _round_weights(concentrated_weights)
+        return (result, concentration_diagnostics) if return_diagnostics else result

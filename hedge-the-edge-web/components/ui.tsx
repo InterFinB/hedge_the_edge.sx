@@ -274,11 +274,26 @@ export function PortfolioOverview({ result }: { result: any }) {
       value: pct(result.largest_weight),
     },
     {
+      title: "Positions",
+      value:
+        result.post_prune_assets ??
+        result.active_positions ??
+        "—",
+    },
+    {
       title: "Diversification ratio",
       value:
         result.diversification_ratio !== undefined &&
         result.diversification_ratio !== null
           ? result.diversification_ratio.toFixed(2)
+          : "—",
+    },
+    {
+      title: "Threshold used",
+      value:
+        result.concentration_threshold_used !== undefined &&
+        result.concentration_threshold_used !== null
+          ? `${(result.concentration_threshold_used * 100).toFixed(1)}%`
           : "—",
     },
     {
@@ -298,7 +313,7 @@ export function PortfolioOverview({ result }: { result: any }) {
         </h2>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
         {cards.map((card) => (
           <div
             key={card.title}
@@ -1328,11 +1343,19 @@ export function DiagnosticsPanel({
   diversificationRatio,
   meaningfulPositionsCount,
   topRiskContributions,
+  prePruneAssets,
+  postPruneAssets,
+  concentrationThresholdUsed,
+  concentrationCapped,
 }: {
   concentration?: number;
   diversificationRatio?: number;
   meaningfulPositionsCount?: number;
   topRiskContributions: { ticker: string; value: number }[];
+  prePruneAssets?: number;
+  postPruneAssets?: number;
+  concentrationThresholdUsed?: number;
+  concentrationCapped?: boolean;
 }) {
   const filtered = (topRiskContributions || []).filter((x) => x.value > 0);
   const total = filtered.reduce((sum, item) => sum + item.value, 0);
@@ -1347,7 +1370,7 @@ export function DiagnosticsPanel({
 
   return (
     <Box title="Diagnostics">
-      <div className="grid gap-3 lg:grid-cols-[220px_220px_160px_minmax(0,1fr)]">
+      <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
           <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
             Concentration
@@ -1376,6 +1399,38 @@ export function DiagnosticsPanel({
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Before concentration
+          </p>
+          <p className="mt-2 text-lg font-semibold text-slate-950">
+            {prePruneAssets ?? "—"}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            After concentration
+          </p>
+          <p className="mt-2 text-lg font-semibold text-slate-950">
+            {postPruneAssets ?? meaningfulPositionsCount ?? "—"}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Threshold used
+          </p>
+          <p className="mt-2 text-lg font-semibold text-slate-950">
+            {concentrationThresholdUsed !== undefined
+              ? `${(concentrationThresholdUsed * 100).toFixed(1)}%`
+              : "—"}
+          </p>
+          {concentrationCapped ? (
+            <p className="mt-1 text-xs text-slate-500">20-asset cap applied</p>
+          ) : null}
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 lg:col-span-2 2xl:col-span-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
             Top risk drivers
           </p>

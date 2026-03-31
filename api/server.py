@@ -177,6 +177,10 @@ def _build_explanation_input_block(
     concentration: float,
     active_positions: int,
     largest_weight: float,
+    pre_prune_assets: int | None,
+    post_prune_assets: int | None,
+    concentration_threshold_used: float | None,
+    concentration_capped: bool,
     simulation_summary: dict,
     universe_status: dict,
     market_data: dict,
@@ -217,6 +221,12 @@ def _build_explanation_input_block(
             "largest_weight_percent": round(float(largest_weight) * 100, 4),
             "diversification_ratio": round(float(diversification_ratio), 6),
             "concentration": round(float(concentration), 6),
+            "pre_prune_assets": pre_prune_assets,
+            "post_prune_assets": post_prune_assets,
+            "concentration_threshold_used": None
+            if concentration_threshold_used is None
+            else round(float(concentration_threshold_used), 6),
+            "concentration_capped": concentration_capped,
         },
         "top_positions": top_positions,
         "top_categories": top_categories,
@@ -311,12 +321,13 @@ def generate_portfolio(request: PortfolioRequest):
         max_return_seconds = round(time.perf_counter() - max_return_start, 6)
 
         optimize_start = time.perf_counter()
-        weights = optimize_portfolio(
+        weights, concentration_diagnostics = optimize_portfolio(
             target_return=target_return,
             price_data=price_data,
             max_volatility=max_volatility,
             expected_returns=expected_returns,
             cov_matrix=cov_matrix,
+            return_diagnostics=True,
         )
         optimize_seconds = round(time.perf_counter() - optimize_start, 6)
 
@@ -368,6 +379,15 @@ def generate_portfolio(request: PortfolioRequest):
         active_positions = len(meaningful_positions)
         largest_weight = max(weights.values()) if weights else 0.0
 
+        pre_prune_assets = concentration_diagnostics.get("pre_prune_assets")
+        post_prune_assets = concentration_diagnostics.get("post_prune_assets")
+        concentration_threshold_used = concentration_diagnostics.get(
+            "concentration_threshold_used"
+        )
+        concentration_capped = bool(
+            concentration_diagnostics.get("concentration_capped", 0)
+        )
+
         risk_effects = risk_contributions
 
         chart_data = [
@@ -399,6 +419,10 @@ def generate_portfolio(request: PortfolioRequest):
             concentration=concentration,
             active_positions=active_positions,
             largest_weight=largest_weight,
+            pre_prune_assets=pre_prune_assets,
+            post_prune_assets=post_prune_assets,
+            concentration_threshold_used=concentration_threshold_used,
+            concentration_capped=concentration_capped,
             simulation_summary=sim_summary,
             universe_status=universe_status,
             market_data=_serialize_market_state(state),
@@ -463,6 +487,10 @@ def generate_portfolio(request: PortfolioRequest):
             "active_positions": active_positions,
             "meaningful_positions": meaningful_positions,
             "largest_weight": largest_weight,
+            "pre_prune_assets": pre_prune_assets,
+            "post_prune_assets": post_prune_assets,
+            "concentration_threshold_used": concentration_threshold_used,
+            "concentration_capped": concentration_capped,
             "top_positions": _build_top_positions(weights, limit=5),
             "recompute_interval": recompute,
             "recompute_schedule": recompute,

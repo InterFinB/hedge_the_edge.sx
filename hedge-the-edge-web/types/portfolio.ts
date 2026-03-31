@@ -97,6 +97,10 @@ export type ExplanationInputBlock = {
     largest_weight_percent?: number;
     diversification_ratio?: number;
     concentration?: number;
+    pre_prune_assets?: number;
+    post_prune_assets?: number;
+    concentration_threshold_used?: number;
+    concentration_capped?: boolean;
   };
   top_positions?: TopPositionDatum[];
   top_categories?: CategoryExposureDatum[];
@@ -112,17 +116,17 @@ export type ExplanationInputBlock = {
 };
 
 export type MarketDataMetadata = {
-  configured_tickers?: string[];
+  configured_tickers?: string[] | null;
   configured_count?: number;
-  auto_pruned_tickers?: string[];
+  auto_pruned_tickers?: string[] | null;
   auto_pruned_count?: number;
-  requested_tickers?: string[];
+  requested_tickers?: string[] | null;
   requested_count?: number;
-  initial_missing_tickers?: string[];
-  recovered_tickers?: string[];
-  final_missing_tickers?: string[];
-  dropped_after_cleaning?: string[];
-  final_tickers?: string[];
+  initial_missing_tickers?: string[] | null;
+  recovered_tickers?: string[] | null;
+  final_missing_tickers?: string[] | null;
+  dropped_after_cleaning?: string[] | null;
+  final_tickers?: string[] | null;
   surviving_count?: number;
   summary?: string | null;
 };
@@ -163,6 +167,10 @@ export type PortfolioResponse = {
   active_positions?: number;
   meaningful_positions?: string[];
   largest_weight?: number;
+  pre_prune_assets?: number;
+  post_prune_assets?: number;
+  concentration_threshold_used?: number;
+  concentration_capped?: boolean;
 
   recompute_interval?: string | number | { interval_label?: string };
   recompute_schedule?: string | number;

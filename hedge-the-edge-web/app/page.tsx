@@ -265,6 +265,10 @@ export default function Home() {
                   diversificationRatio={result.diversification_ratio}
                   meaningfulPositionsCount={result.meaningful_positions?.length}
                   topRiskContributions={riskContributionEntries}
+                  prePruneAssets={result.pre_prune_assets}
+                  postPruneAssets={result.post_prune_assets}
+                  concentrationThresholdUsed={result.concentration_threshold_used}
+                  concentrationCapped={result.concentration_capped}
                 />
               </section>
             </div>
