@@ -77,6 +77,19 @@ def _serialize_market_state(state: dict) -> dict:
     }
 
 
+def _serialize_refresh_result(refreshed: dict) -> dict:
+    price_data = refreshed["price_data"]
+    metadata = refreshed.get("data_metadata") or {}
+
+    return {
+        "message": "Data refresh completed",
+        "rows": len(price_data),
+        "columns": len(price_data.columns),
+        "summary": metadata.get("summary"),
+        "market_data": _serialize_market_state(refreshed),
+    }
+
+
 @app.get("/")
 def root():
     return {
@@ -87,20 +100,21 @@ def root():
 
 @app.get("/cache-status")
 def cache_status():
-    return data_loader.get_cache_status()
+    try:
+        return data_loader.get_cache_status()
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to read cache status: {str(e)}",
+        )
 
 
 @app.post("/refresh-data")
 def refresh_data():
     try:
         refreshed = data_loader.force_refresh()
-
-        return {
-            "message": "Data refresh completed",
-            "rows": len(refreshed["price_data"]),
-            "columns": len(refreshed["price_data"].columns),
-            "market_data": _serialize_market_state(refreshed),
-        }
+        return _serialize_refresh_result(refreshed)
 
     except ValueError as e:
         raise HTTPException(

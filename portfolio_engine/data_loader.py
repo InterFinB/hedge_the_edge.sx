@@ -20,7 +20,7 @@ _cached_tickers = None
 _cache_timestamp = None
 _cached_data_metadata = None
 
-CACHE_TTL_SECONDS = 10800  # 6 hours
+CACHE_TTL_SECONDS = 10800  # 3 hours
 DOWNLOAD_RETRIES = 3
 RETRY_SLEEP_SECONDS = 5
 MIN_VALID_COLUMN_RATIO = 0.8
@@ -62,6 +62,42 @@ def _write_parquet_atomic(df: pd.DataFrame, path: Path) -> None:
     temp_path.replace(path)
 
 
+def _now() -> datetime.datetime:
+    return datetime.datetime.now()
+
+
+def _seconds_since(timestamp: datetime.datetime | None) -> float | None:
+    if timestamp is None:
+        return None
+    return round((_now() - timestamp).total_seconds(), 3)
+
+
+def _round_seconds(value: float) -> float:
+    return round(float(value), 3)
+
+
+def _build_metadata_summary(metadata: dict | None) -> str | None:
+    if not metadata:
+        return None
+
+    requested_count = metadata.get("requested_count")
+    surviving_count = metadata.get("surviving_count")
+    recovered_count = metadata.get("recovered_count")
+    final_missing_count = metadata.get("final_missing_count")
+    dropped_count = metadata.get("dropped_count")
+
+    if requested_count is None or surviving_count is None:
+        return None
+
+    return (
+        f"{requested_count} requested, "
+        f"{surviving_count} survived, "
+        f"{recovered_count or 0} recovered, "
+        f"{final_missing_count or 0} still missing, "
+        f"{dropped_count or 0} dropped after cleaning"
+    )
+
+
 def _save_cache_to_disk(
     price_data: pd.DataFrame,
     expected_returns: pd.Series,
@@ -86,6 +122,7 @@ def _save_cache_to_disk(
         "warning": warning,
         "start_date": str(START_DATE),
         "data_metadata": data_metadata or {},
+        "data_summary": _build_metadata_summary(data_metadata),
     }
 
     _write_parquet_atomic(price_data, PRICES_PATH)
@@ -115,6 +152,11 @@ def _load_cache_from_disk() -> dict | None:
             else None
         )
 
+        data_metadata = metadata.get("data_metadata", {})
+        if isinstance(data_metadata, dict) and cache_timestamp is not None:
+            data_metadata.setdefault("cache_age_seconds", _seconds_since(cache_timestamp))
+            data_metadata.setdefault("summary", metadata.get("data_summary"))
+
         return {
             "price_data": price_data,
             "expected_returns": expected_returns,
@@ -123,7 +165,7 @@ def _load_cache_from_disk() -> dict | None:
             "cache_timestamp": cache_timestamp,
             "cache_status": metadata.get("cache_status", "disk_loaded"),
             "warning": metadata.get("warning"),
-            "data_metadata": metadata.get("data_metadata", {}),
+            "data_metadata": data_metadata,
         }
 
     except Exception:
@@ -169,7 +211,7 @@ def _is_cache_valid() -> bool:
     if _cache_timestamp is None:
         return False
 
-    age = (datetime.datetime.now() - _cache_timestamp).total_seconds()
+    age = (_now() - _cache_timestamp).total_seconds()
     return age < CACHE_TTL_SECONDS
 
 
@@ -260,24 +302,41 @@ def _find_missing_tickers(price_data: pd.DataFrame, requested_tickers: List[str]
     return [ticker for ticker in requested_tickers if ticker not in available]
 
 
-def _download_missing_tickers_individually(missing_tickers: List[str]) -> pd.DataFrame:
+def _download_missing_tickers_individually(
+    missing_tickers: List[str],
+) -> Tuple[pd.DataFrame, dict]:
     recovered_frames = []
+    failed_recoveries = []
+    per_ticker_seconds = {}
 
     for ticker in missing_tickers:
+        ticker_start = time.perf_counter()
+
         try:
             single_df = _download_price_frame([ticker])
             if ticker in single_df.columns:
                 recovered_frames.append(single_df[[ticker]])
+            else:
+                failed_recoveries.append(ticker)
         except Exception:
-            continue
+            failed_recoveries.append(ticker)
+        finally:
+            per_ticker_seconds[ticker] = _round_seconds(time.perf_counter() - ticker_start)
 
     if not recovered_frames:
-        return pd.DataFrame()
+        return pd.DataFrame(), {
+            "failed_recoveries": failed_recoveries,
+            "individual_recovery_seconds_by_ticker": per_ticker_seconds,
+        }
 
     combined = pd.concat(recovered_frames, axis=1)
     combined = combined.loc[:, ~combined.columns.duplicated()]
     combined = combined.sort_index()
-    return combined
+
+    return combined, {
+        "failed_recoveries": failed_recoveries,
+        "individual_recovery_seconds_by_ticker": per_ticker_seconds,
+    }
 
 
 def _combine_price_frames(base: pd.DataFrame, recovered: pd.DataFrame) -> pd.DataFrame:
@@ -322,37 +381,92 @@ def _clean_price_data(price_data: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]
 
 def _download_and_prepare_price_data() -> Tuple[pd.DataFrame, dict]:
     requested_tickers = list(TICKERS)
+    refresh_start = time.perf_counter()
 
+    batch_download_start = time.perf_counter()
     initial_price_data = _download_price_frame(requested_tickers)
+    batch_download_seconds = _round_seconds(time.perf_counter() - batch_download_start)
+
     missing_after_batch = _find_missing_tickers(initial_price_data, requested_tickers)
 
     recovered_data = pd.DataFrame()
-    if missing_after_batch:
-        recovered_data = _download_missing_tickers_individually(missing_after_batch)
+    recovery_details = {
+        "failed_recoveries": [],
+        "individual_recovery_seconds_by_ticker": {},
+    }
+    individual_recovery_seconds = 0.0
 
+    if missing_after_batch:
+        recovery_start = time.perf_counter()
+        recovered_data, recovery_details = _download_missing_tickers_individually(
+            missing_after_batch
+        )
+        individual_recovery_seconds = _round_seconds(time.perf_counter() - recovery_start)
+
+    combine_start = time.perf_counter()
     combined_price_data = _combine_price_frames(initial_price_data, recovered_data)
+    combine_seconds = _round_seconds(time.perf_counter() - combine_start)
 
     still_missing = _find_missing_tickers(combined_price_data, requested_tickers)
+
+    cleaning_start = time.perf_counter()
     cleaned_price_data, dropped_after_cleaning = _clean_price_data(combined_price_data)
+    cleaning_seconds = _round_seconds(time.perf_counter() - cleaning_start)
+
+    recovered_tickers = [
+        ticker for ticker in missing_after_batch if ticker in recovered_data.columns
+    ]
 
     metadata = {
         "requested_tickers": requested_tickers,
+        "requested_count": len(requested_tickers),
         "initial_missing_tickers": missing_after_batch,
-        "recovered_tickers": [
-            ticker for ticker in missing_after_batch if ticker in recovered_data.columns
-        ],
+        "initial_missing_count": len(missing_after_batch),
+        "recovered_tickers": recovered_tickers,
+        "recovered_count": len(recovered_tickers),
+        "failed_recoveries": recovery_details.get("failed_recoveries", []),
         "final_missing_tickers": still_missing,
+        "final_missing_count": len(still_missing),
         "dropped_after_cleaning": dropped_after_cleaning,
+        "dropped_count": len(dropped_after_cleaning),
         "final_tickers": list(cleaned_price_data.columns),
+        "surviving_count": int(cleaned_price_data.shape[1]),
+        "price_rows": int(cleaned_price_data.shape[0]),
+        "price_columns": int(cleaned_price_data.shape[1]),
+        "timings": {
+            "batch_download_seconds": batch_download_seconds,
+            "individual_recovery_seconds": individual_recovery_seconds,
+            "combine_seconds": combine_seconds,
+            "cleaning_seconds": cleaning_seconds,
+            "individual_recovery_seconds_by_ticker": recovery_details.get(
+                "individual_recovery_seconds_by_ticker", {}
+            ),
+            "download_and_prepare_total_seconds": _round_seconds(
+                time.perf_counter() - refresh_start
+            ),
+        },
     }
+
+    metadata["summary"] = _build_metadata_summary(metadata)
 
     return cleaned_price_data, metadata
 
 
 def _build_market_state(price_data: pd.DataFrame, metadata: dict | None = None) -> dict:
+    expected_returns_start = time.perf_counter()
     expected_returns = compute_expected_returns(price_data)
+    expected_returns_seconds = _round_seconds(time.perf_counter() - expected_returns_start)
+
+    covariance_start = time.perf_counter()
     cov_matrix = compute_covariance_matrix(price_data)
+    covariance_seconds = _round_seconds(time.perf_counter() - covariance_start)
+
     tickers = list(price_data.columns)
+
+    if metadata is not None:
+        metadata.setdefault("timings", {})
+        metadata["timings"]["expected_returns_seconds"] = expected_returns_seconds
+        metadata["timings"]["covariance_seconds"] = covariance_seconds
 
     state = {
         "price_data": price_data,
@@ -385,7 +499,13 @@ def _store_cache(
     _cached_expected_returns = expected_returns
     _cached_cov_matrix = cov_matrix
     _cached_tickers = tickers
-    _cache_timestamp = datetime.datetime.now()
+    _cache_timestamp = _now()
+
+    if isinstance(data_metadata, dict):
+        data_metadata = dict(data_metadata)
+        data_metadata["cache_age_seconds"] = 0.0
+        data_metadata["summary"] = _build_metadata_summary(data_metadata)
+
     _cached_data_metadata = data_metadata
 
     _save_cache_to_disk(
@@ -419,29 +539,11 @@ def refresh_market_cache(force_refresh: bool = False) -> dict:
     )
 
     if not force_refresh and has_any_cache and _is_cache_valid():
+        metadata = dict(_cached_data_metadata or {})
+        metadata["cache_age_seconds"] = _seconds_since(_cache_timestamp)
+        metadata["summary"] = metadata.get("summary") or _build_metadata_summary(metadata)
+
         return {
-            "price_data": _cached_price_data,
-            "expected_returns": _cached_expected_returns,
-            "cov_matrix": _cached_cov_matrix,
-            "tickers": _cached_tickers,
-            "cache_timestamp": _cache_timestamp,
-            "cache_status": "fresh",
-            "data_metadata": _cached_data_metadata,
-        }
-
-    try:
-        price_data, metadata = _download_and_prepare_price_data()
-        market_state = _build_market_state(price_data, metadata=metadata)
-
-        _store_cache(
-            price_data=market_state["price_data"],
-            expected_returns=market_state["expected_returns"],
-            cov_matrix=market_state["cov_matrix"],
-            tickers=market_state["tickers"],
-            data_metadata=metadata,
-        )
-
-        response = {
             "price_data": _cached_price_data,
             "expected_returns": _cached_expected_returns,
             "cov_matrix": _cached_cov_matrix,
@@ -451,17 +553,59 @@ def refresh_market_cache(force_refresh: bool = False) -> dict:
             "data_metadata": metadata,
         }
 
-        if metadata["final_missing_tickers"] or metadata["dropped_after_cleaning"]:
+    refresh_total_start = time.perf_counter()
+
+    try:
+        price_data, metadata = _download_and_prepare_price_data()
+        market_state = _build_market_state(price_data, metadata=metadata)
+
+        metadata.setdefault("timings", {})
+        metadata["timings"]["total_refresh_seconds"] = _round_seconds(
+            time.perf_counter() - refresh_total_start
+        )
+
+        _store_cache(
+            price_data=market_state["price_data"],
+            expected_returns=market_state["expected_returns"],
+            cov_matrix=market_state["cov_matrix"],
+            tickers=market_state["tickers"],
+            data_metadata=metadata,
+        )
+
+        response_metadata = dict(_cached_data_metadata or {})
+        response_metadata["cache_age_seconds"] = _seconds_since(_cache_timestamp)
+        response_metadata["summary"] = (
+            response_metadata.get("summary")
+            or _build_metadata_summary(response_metadata)
+        )
+
+        response = {
+            "price_data": _cached_price_data,
+            "expected_returns": _cached_expected_returns,
+            "cov_matrix": _cached_cov_matrix,
+            "tickers": _cached_tickers,
+            "cache_timestamp": _cache_timestamp,
+            "cache_status": "fresh",
+            "data_metadata": response_metadata,
+        }
+
+        if response_metadata.get("final_missing_tickers") or response_metadata.get(
+            "dropped_after_cleaning"
+        ):
             response["warning"] = (
                 "Some tickers were unavailable or removed during cleaning. "
-                f"Missing after recovery: {metadata['final_missing_tickers']}. "
-                f"Dropped after cleaning: {metadata['dropped_after_cleaning']}."
+                f"Missing after recovery: {response_metadata.get('final_missing_tickers', [])}. "
+                f"Dropped after cleaning: {response_metadata.get('dropped_after_cleaning', [])}."
             )
 
         return response
 
     except Exception as e:
         if has_any_cache:
+            metadata = dict(_cached_data_metadata or {})
+            metadata["cache_age_seconds"] = _seconds_since(_cache_timestamp)
+            metadata["summary"] = metadata.get("summary") or _build_metadata_summary(metadata)
+
             return {
                 "price_data": _cached_price_data,
                 "expected_returns": _cached_expected_returns,
@@ -470,7 +614,7 @@ def refresh_market_cache(force_refresh: bool = False) -> dict:
                 "cache_timestamp": _cache_timestamp,
                 "cache_status": "stale_fallback",
                 "warning": f"Using stale cached market data because refresh failed: {e}",
-                "data_metadata": _cached_data_metadata,
+                "data_metadata": metadata,
             }
 
         raise ValueError(
@@ -522,6 +666,10 @@ def load_cached_market_state(require_valid: bool = True) -> dict:
             "Cached market data is stale. Please run /refresh-data before generating a portfolio."
         )
 
+    metadata = dict(_cached_data_metadata or {})
+    metadata["cache_age_seconds"] = _seconds_since(_cache_timestamp)
+    metadata["summary"] = metadata.get("summary") or _build_metadata_summary(metadata)
+
     return {
         "price_data": _cached_price_data,
         "expected_returns": _cached_expected_returns,
@@ -529,7 +677,7 @@ def load_cached_market_state(require_valid: bool = True) -> dict:
         "tickers": _cached_tickers,
         "cache_timestamp": _cache_timestamp,
         "cache_status": "fresh" if is_valid else "stale_cached",
-        "data_metadata": _cached_data_metadata,
+        "data_metadata": metadata,
         "warning": None if is_valid else "Using stale cached market data.",
     }
 
@@ -537,13 +685,21 @@ def load_cached_market_state(require_valid: bool = True) -> dict:
 def get_cache_status() -> dict:
     _hydrate_memory_cache_from_disk_if_needed()
 
+    metadata = dict(_cached_data_metadata or {})
+    metadata["cache_age_seconds"] = _seconds_since(_cache_timestamp)
+    metadata["summary"] = metadata.get("summary") or _build_metadata_summary(metadata)
+
     return {
         "cache_valid": _is_cache_valid(),
         "cache_timestamp": _cache_timestamp.isoformat() if _cache_timestamp else None,
+        "cache_age_seconds": _seconds_since(_cache_timestamp),
+        "cache_ttl_seconds": CACHE_TTL_SECONDS,
         "num_assets": len(_cached_tickers) if _cached_tickers is not None else 0,
         "tickers": _cached_tickers if _cached_tickers is not None else [],
         "cache_dir": str(CACHE_DIR),
         "disk_cache_present": _has_disk_cache(),
+        "data_summary": metadata.get("summary"),
+        "data_metadata": metadata,
     }
 
 
