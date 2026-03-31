@@ -20,7 +20,7 @@ _cached_tickers = None
 _cache_timestamp = None
 _cached_data_metadata = None
 
-CACHE_TTL_SECONDS = 3600  # 1 hour
+CACHE_TTL_SECONDS = 10800  # 6 hours
 DOWNLOAD_RETRIES = 3
 RETRY_SLEEP_SECONDS = 5
 MIN_VALID_COLUMN_RATIO = 0.8
