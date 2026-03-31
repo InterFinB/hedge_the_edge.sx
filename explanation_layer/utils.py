@@ -62,6 +62,16 @@ def classify_dispersion(p5, p95):
     return "wide"
 
 
+def classify_tail_severity(p5):
+    if p5 is None:
+        return None
+    if p5 <= -0.10:
+        return "severe"
+    if p5 <= -0.05:
+        return "meaningful"
+    return "contained"
+
+
 def find_capped_assets(weights, max_weight_constraint, threshold=0.001):
     active_assets = get_active_assets(weights, threshold=threshold)
     return [
@@ -99,6 +109,50 @@ def build_category_exposure(weights, threshold=0.001):
 
 def get_top_categories(weights, top_n=3, threshold=0.001):
     return build_category_exposure(weights, threshold=threshold)[:top_n]
+
+
+def _safe_positive_total(risk_contributions):
+    positive_values = [float(v) for v in risk_contributions.values() if v > 0]
+    return sum(positive_values)
+
+
+def get_risk_share_profile(risk_contributions):
+    top = get_top_positive_risk_contributors(risk_contributions, top_n=3)
+    total_positive = _safe_positive_total(risk_contributions)
+
+    if total_positive <= 1e-12 or not top:
+        return {
+            "top": top,
+            "top1_share": 0.0,
+            "top2_share": 0.0,
+            "top3_share": 0.0,
+            "profile": "unknown",
+        }
+
+    top1_share = float(top[0][1]) / total_positive if len(top) >= 1 else 0.0
+    top2_share = (
+        float(top[0][1] + top[1][1]) / total_positive if len(top) >= 2 else top1_share
+    )
+    top3_share = (
+        float(sum(v for _, v in top[:3])) / total_positive if len(top) >= 1 else 0.0
+    )
+
+    if top1_share >= 0.35:
+        profile = "single_name_dominant"
+    elif top2_share >= 0.55:
+        profile = "top_two_concentrated"
+    elif top3_share >= 0.70:
+        profile = "clustered"
+    else:
+        profile = "distributed"
+
+    return {
+        "top": top,
+        "top1_share": top1_share,
+        "top2_share": top2_share,
+        "top3_share": top3_share,
+        "profile": profile,
+    }
 
 
 def asset_buckets(active_assets):

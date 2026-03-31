@@ -3,7 +3,8 @@ from .utils import (
     classify_diversification,
     classify_loss_probability,
     classify_dispersion,
-    get_top_positive_risk_contributors,
+    classify_tail_severity,
+    get_risk_share_profile,
     format_asset_label,
 )
 from portfolio_engine.recompute_schedule import get_recompute_schedule
@@ -31,52 +32,65 @@ def generate_watch_for(
         simulation_percentile_5,
         simulation_percentile_95,
     )
+    tail_level = classify_tail_severity(simulation_percentile_5)
 
-    top_risk = get_top_positive_risk_contributors(risk_contributions, top_n=2)
+    risk_profile = get_risk_share_profile(risk_contributions)
+    top = risk_profile["top"]
+    profile = risk_profile["profile"]
 
-    # 1. Risk-driver monitoring
-    if top_risk:
-        if len(top_risk) == 1:
-            bullets.append(
-                f"Watch {format_asset_label(top_risk[0][0])}: it is currently the main driver of portfolio risk."
-            )
-        else:
-            bullets.append(
-                f"Watch {format_asset_label(top_risk[0][0])} and {format_asset_label(top_risk[1][0])}: they are the leading contributors to portfolio risk."
-            )
+    # 1. Risk concentration logic
+    if profile == "single_name_dominant" and top:
+        bullets.append(
+            f"Watch {format_asset_label(top[0][0])}: it is currently the single dominant driver of portfolio risk."
+        )
+    elif profile == "top_two_concentrated" and len(top) >= 2:
+        bullets.append(
+            f"Watch {format_asset_label(top[0][0])} and {format_asset_label(top[1][0])}: together they account for a concentrated share of total portfolio risk."
+        )
+    elif profile == "clustered" and len(top) >= 3:
+        bullets.append(
+            f"Watch {format_asset_label(top[0][0])}, {format_asset_label(top[1][0])}, and {format_asset_label(top[2][0])}: portfolio risk is clustered across these positions."
+        )
+    elif profile == "distributed":
+        bullets.append(
+            "Watch cross-asset interactions rather than a single name: portfolio risk is relatively distributed across multiple positions."
+        )
 
-    # 2. Concentration / diversification
+    # 2. Structural portfolio quality
     if conc_level == "high":
         bullets.append(
             "Watch concentration closely: a small number of positions now account for a large share of portfolio behavior."
         )
     elif div_level == "low":
         bullets.append(
-            "Watch diversification quality: portfolio risk reduction is limited, so correlations matter more."
+            "Watch diversification quality: portfolio-level risk reduction is limited, so correlation changes matter more."
         )
 
     # 3. Downside probability
     if downside_level == "elevated":
         bullets.append(
-            "Watch downside risk: the modeled probability of a negative 1-year outcome is materially elevated."
+            "Pay close attention to downside risk: the modeled probability of a negative 1-year outcome is materially elevated."
         )
     elif downside_level == "moderate":
         bullets.append(
             "Watch downside conditions: modeled loss probability is not extreme, but it is high enough to matter in weaker markets."
         )
+    elif downside_level == "low":
+        bullets.append(
+            "Keep an eye on downside conditions, even though modeled loss probability is relatively contained."
+        )
 
-    # 4. Left-tail severity
-    if simulation_percentile_5 is not None:
-        if simulation_percentile_5 <= -0.10:
-            bullets.append(
-                f"Watch tail risk: the 5th-percentile outcome is {simulation_percentile_5:.2%}, which signals a meaningful downside tail."
-            )
-        elif simulation_percentile_5 <= -0.05:
-            bullets.append(
-                f"Watch downside dispersion: the 5th-percentile outcome reaches {simulation_percentile_5:.2%}."
-            )
+    # 4. Tail severity
+    if tail_level == "severe":
+        bullets.append(
+            f"Watch tail risk: the 5th-percentile outcome is {simulation_percentile_5:.2%}, which signals a severe downside tail under adverse scenarios."
+        )
+    elif tail_level == "meaningful":
+        bullets.append(
+            f"Watch downside dispersion: the 5th-percentile outcome reaches {simulation_percentile_5:.2%}."
+        )
 
-    # 5. Range width / dispersion
+    # 5. Dispersion logic
     if dispersion_level == "wide":
         bullets.append(
             "Watch outcome dispersion: the simulated range is wide, so realized returns may vary materially from the central case."
@@ -93,14 +107,13 @@ def generate_watch_for(
                 f"Watch the volatility cap: current portfolio volatility ({portfolio_volatility:.2%}) is close to the requested limit ({max_volatility:.2%})."
             )
 
-    # 7. Recompute cadence reminder in more intelligent form
+    # 7. Recompute cadence
     if portfolio_volatility is not None:
         schedule = get_recompute_schedule(portfolio_volatility)
         bullets.append(
             f"Watch for drift between recomputations: at the current volatility regime, the portfolio should be reviewed on roughly a {schedule.interval_label} cadence."
         )
 
-    # Fallback: never return empty
     if not bullets:
         bullets.append(
             "Watch the largest positions and leading risk contributors, as they are the fastest channels through which portfolio behavior can change."
@@ -109,7 +122,6 @@ def generate_watch_for(
             "Watch simulation-based downside metrics over time, especially loss probability and the lower-tail outcome range."
         )
 
-    # Keep the section tight
     deduped = []
     seen = set()
     for bullet in bullets:

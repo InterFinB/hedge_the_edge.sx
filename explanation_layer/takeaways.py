@@ -2,8 +2,7 @@ from .utils import (
     classify_concentration,
     classify_diversification,
     classify_loss_probability,
-    get_top_positive_risk_contributors,
-    get_top_categories,
+    get_risk_share_profile,
     format_asset_label,
 )
 from portfolio_engine.recompute_schedule import get_recompute_schedule
@@ -26,9 +25,12 @@ def generate_takeaways(
     conc_level = classify_concentration(concentration)
     div_level = classify_diversification(diversification_ratio)
     downside_level = classify_loss_probability(simulation_loss_probability)
-    top_risk = get_top_positive_risk_contributors(risk_contributions, top_n=1)
+    risk_profile = get_risk_share_profile(risk_contributions)
 
-    # Build a more decision-useful summary of structure
+    top = risk_profile["top"]
+    profile = risk_profile["profile"]
+
+    # 1. Structural summary of the portfolio
     if div_level == "strong" and conc_level == "low":
         bullets.append(
             "The portfolio reaches its objective without relying on a single dominant position, which supports resilience at the portfolio level."
@@ -46,29 +48,39 @@ def generate_takeaways(
             "The portfolio structure is acceptable, but concentration and diversification should still be monitored together."
         )
 
-    if conc_level == "high":
-        bullets.append("Concentration is elevated and should be monitored closely.")
-    elif conc_level == "moderate":
-        bullets.append("Concentration is noticeable but not extreme.")
-    else:
-        bullets.append("Concentration is low.")
+    # 2. Dynamic risk concentration summary
+    if profile == "single_name_dominant" and top:
+        bullets.append(
+            f"{format_asset_label(top[0][0])} is currently the single largest driver of portfolio risk."
+        )
+    elif profile == "top_two_concentrated" and len(top) >= 2:
+        bullets.append(
+            f"Risk is concentrated primarily in {format_asset_label(top[0][0])} and {format_asset_label(top[1][0])}."
+        )
+    elif profile == "clustered" and len(top) >= 3:
+        bullets.append(
+            "Risk is concentrated in a small cluster of positions rather than being dominated by only one name."
+        )
+    elif profile == "distributed":
+        bullets.append(
+            "Risk is distributed across several positions rather than being dominated by a single name."
+        )
 
+    # 3. Recompute cadence
     if portfolio_volatility is not None and desired_return is not None:
         schedule = get_recompute_schedule(portfolio_volatility)
         bullets.append(
             f"To maintain the target return of {format_pct(desired_return)} on a minimum-risk basis, the portfolio should be recomputed every {schedule.interval_label}."
         )
 
-    if top_risk:
-        bullets.append(
-            f"The largest current risk contribution comes from {format_asset_label(top_risk[0][0])}."
-        )
-
+    # 4. Downside framing
     if downside_level == "elevated":
         bullets.append(
-            "Modeled downside risk is materially elevated, so the target return should be evaluated against tolerance for negative outcomes."
+            "Modeled downside risk is materially elevated and should be weighed against return objectives."
         )
     elif downside_level == "low":
-        bullets.append("Modeled downside risk is relatively contained.")
+        bullets.append(
+            "Modeled downside risk is relatively contained."
+        )
 
     return bullets[:5]
