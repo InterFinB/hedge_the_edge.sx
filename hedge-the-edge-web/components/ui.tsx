@@ -1368,8 +1368,43 @@ export function DiagnosticsPanel({
         }))
       : [];
 
+  const holdingsShown = postPruneAssets ?? meaningfulPositionsCount;
+
+  let concentrationLabel = "Balanced";
+  let concentrationTone =
+    "border-slate-200 bg-slate-50 text-slate-700";
+
+  if (typeof holdingsShown === "number") {
+    if (holdingsShown <= 10) {
+      concentrationLabel = "Highly concentrated";
+      concentrationTone =
+        "border-amber-200 bg-amber-50 text-amber-800";
+    } else if (holdingsShown <= 15) {
+      concentrationLabel = "Concentrated";
+      concentrationTone =
+        "border-blue-200 bg-blue-50 text-blue-800";
+    } else if (holdingsShown <= 20) {
+      concentrationLabel = "Balanced";
+      concentrationTone =
+        "border-emerald-200 bg-emerald-50 text-emerald-800";
+    } else {
+      concentrationLabel = "Broad";
+      concentrationTone =
+        "border-slate-200 bg-slate-50 text-slate-700";
+    }
+  }
+
   return (
-    <Box title="Diagnostics">
+    <Box
+      title="Diagnostics"
+      rightSlot={
+        <span
+          className={`rounded-full border px-3 py-1 text-xs font-semibold ${concentrationTone}`}
+        >
+          {concentrationLabel}
+        </span>
+      }
+    >
       <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
           <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
@@ -1377,6 +1412,9 @@ export function DiagnosticsPanel({
           </p>
           <p className="mt-2 text-lg font-semibold text-slate-950">
             {num(concentration, 4)}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Higher values indicate more weight concentrated in fewer names.
           </p>
         </div>
 
@@ -1387,14 +1425,20 @@ export function DiagnosticsPanel({
           <p className="mt-2 text-lg font-semibold text-slate-950">
             {num(diversificationRatio, 4)}
           </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Higher values generally suggest broader risk spreading.
+          </p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
           <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Positions
+            Final positions
           </p>
           <p className="mt-2 text-lg font-semibold text-slate-950">
-            {meaningfulPositionsCount ?? "—"}
+            {holdingsShown ?? "—"}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Holdings that survived the final concentration step.
           </p>
         </div>
 
@@ -1405,14 +1449,8 @@ export function DiagnosticsPanel({
           <p className="mt-2 text-lg font-semibold text-slate-950">
             {prePruneAssets ?? "—"}
           </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            After concentration
-          </p>
-          <p className="mt-2 text-lg font-semibold text-slate-950">
-            {postPruneAssets ?? meaningfulPositionsCount ?? "—"}
+          <p className="mt-1 text-xs text-slate-500">
+            Raw optimizer holdings before pruning and cap logic.
           </p>
         </div>
 
@@ -1425,9 +1463,21 @@ export function DiagnosticsPanel({
               ? `${(concentrationThresholdUsed * 100).toFixed(1)}%`
               : "—"}
           </p>
-          {concentrationCapped ? (
-            <p className="mt-1 text-xs text-slate-500">20-asset cap applied</p>
-          ) : null}
+          <p className="mt-1 text-xs text-slate-500">
+            Minimum weight used to keep a position meaningful.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            20-asset cap
+          </p>
+          <p className="mt-2 text-lg font-semibold text-slate-950">
+            {concentrationCapped ? "Applied" : "Not needed"}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Shows whether the portfolio had to be trimmed to the maximum count.
+          </p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 lg:col-span-2 2xl:col-span-3">
