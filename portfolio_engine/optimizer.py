@@ -16,8 +16,8 @@ from portfolio_engine.config import (
 WEIGHT_BOUNDS = (MIN_WEIGHT_BOUND, MAX_WEIGHT_BOUND)
 
 # Portfolio concentration settings
-CONCENTRATION_MIN_WEIGHT = 0.025
-CONCENTRATION_FALLBACK_MIN_WEIGHT = 0.02
+CONCENTRATION_MIN_WEIGHT = 0.03
+CONCENTRATION_FALLBACK_MIN_WEIGHT = 0.025
 CONCENTRATION_MIN_ASSETS = 8
 CONCENTRATION_MAX_ASSETS = 20
 
@@ -133,10 +133,9 @@ def _round_weights(weights_dict: dict[str, float]) -> dict[str, float]:
 
 def concentrate_weights(
     weights_dict: dict[str, float],
-    min_weight: float = CONCENTRATION_MIN_WEIGHT,
-    fallback_min_weight: float = CONCENTRATION_FALLBACK_MIN_WEIGHT,
-    min_assets: int = CONCENTRATION_MIN_ASSETS,
-    max_assets: int = CONCENTRATION_MAX_ASSETS,
+    thresholds: tuple[float, ...] = (0.035, 0.03, 0.025),
+    min_assets: int = 8,
+    max_assets: int = 20,
 ) -> tuple[dict[str, float], dict[str, float | int]]:
     positive = {
         asset: float(weight)
@@ -146,25 +145,31 @@ def concentrate_weights(
 
     pre_prune_assets = len(positive)
 
-    filtered = {
-        asset: weight
-        for asset, weight in positive.items()
-        if weight >= min_weight
-    }
-    threshold_used = min_weight
+    filtered = {}
+    threshold_used = thresholds[-1]
 
-    if len(filtered) < min_assets:
+    for threshold in thresholds:
+        candidate = {
+            asset: weight
+            for asset, weight in positive.items()
+            if weight >= threshold
+        }
+        if len(candidate) >= min_assets:
+            filtered = candidate
+            threshold_used = threshold
+            break
+
+    if not filtered:
         filtered = {
             asset: weight
             for asset, weight in positive.items()
-            if weight >= fallback_min_weight
+            if weight >= thresholds[-1]
         }
-        threshold_used = fallback_min_weight
+        threshold_used = thresholds[-1]
 
     if not filtered:
         largest_asset = max(positive, key=positive.get)
         filtered = {largest_asset: positive[largest_asset]}
-        threshold_used = fallback_min_weight
 
     capped = False
     if len(filtered) > max_assets:
@@ -185,8 +190,6 @@ def concentrate_weights(
     diagnostics = {
         "pre_prune_assets": pre_prune_assets,
         "post_prune_assets": len(normalized),
-        "concentration_min_weight": float(min_weight),
-        "concentration_fallback_min_weight": float(fallback_min_weight),
         "concentration_threshold_used": float(threshold_used),
         "concentration_min_assets": int(min_assets),
         "concentration_max_assets": int(max_assets),
