@@ -1,6 +1,7 @@
 from .summary import generate_portfolio_summary
 from .risk import generate_risk_commentary
 from .simulation import generate_simulation_commentary
+from .watch_for import generate_watch_for
 from .takeaways import generate_takeaways
 from .vocabulary import generate_vocabulary
 
@@ -46,7 +47,19 @@ def generate_explanation(
         simulation_percentile_95=simulation_percentile_95,
     )
 
-    watch_for = []
+    watch_for = generate_watch_for(
+        weights=weights,
+        risk_contributions=risk_contributions,
+        concentration=concentration,
+        diversification_ratio=diversification_ratio,
+        portfolio_volatility=portfolio_volatility,
+        expected_portfolio_return=expected_portfolio_return,
+        simulation_loss_probability=simulation_loss_probability,
+        simulation_percentile_5=simulation_percentile_5,
+        simulation_percentile_95=simulation_percentile_95,
+        max_volatility=max_volatility,
+        max_weight_constraint=max_weight_constraint,
+    )
 
     takeaways = generate_takeaways(
         concentration=concentration,
@@ -69,13 +82,13 @@ def generate_explanation(
             "Concentration",
         })
 
-    if risk_commentary:
+    if risk_commentary or watch_for:
         used_terms.update({
             "Risk contribution",
             "Correlation",
         })
 
-    if simulation_commentary:
+    if simulation_commentary or watch_for:
         used_terms.update({
             "Monte Carlo simulation",
             "Modeled range of outcomes",
@@ -89,10 +102,7 @@ def generate_explanation(
 
     if any(
         "constraint" in bullet.lower()
-        for bullet in (
-            portfolio_summary
-            + risk_commentary
-        )
+        for bullet in (portfolio_summary + risk_commentary + watch_for)
     ):
         used_terms.update({
             "Weight constraint",
