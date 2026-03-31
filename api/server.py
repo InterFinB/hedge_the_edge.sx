@@ -2,17 +2,21 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
-from portfolio_engine.config import TICKER_TO_NAME
+from collections import defaultdict
+import time
 import sys
 import os
 import traceback
 
+from portfolio_engine.config import (
+    TICKER_TO_NAME,
+    TICKER_TO_CATEGORY,
+)
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from portfolio_engine import data_loader
-from portfolio_engine.data_loader import (
-    load_cached_market_state,
-)
+from portfolio_engine.data_loader import load_cached_market_state
 from portfolio_engine.optimizer import (
     optimize_portfolio,
     compute_max_feasible_return,
@@ -91,6 +95,144 @@ def _serialize_refresh_result(refreshed: dict) -> dict:
     }
 
 
+def _build_category_exposure(weights: dict[str, float]) -> list[dict]:
+    exposure = defaultdict(float)
+
+    for ticker, weight in weights.items():
+        category = TICKER_TO_CATEGORY.get(ticker, "Uncategorized")
+        exposure[category] += float(weight)
+
+    result = [
+        {
+            "category": category,
+            "weight": round(weight, 8),
+            "weight_percent": round(weight * 100, 4),
+        }
+        for category, weight in exposure.items()
+    ]
+
+    result.sort(key=lambda x: x["weight"], reverse=True)
+    return result
+
+
+def _build_top_positions(weights: dict[str, float], limit: int = 5) -> list[dict]:
+    top = sorted(weights.items(), key=lambda x: x[1], reverse=True)[:limit]
+    return [
+        {
+            "ticker": ticker,
+            "name": TICKER_TO_NAME.get(ticker, ticker),
+            "category": TICKER_TO_CATEGORY.get(ticker, "Uncategorized"),
+            "weight": round(float(weight), 8),
+            "weight_percent": round(float(weight) * 100, 4),
+        }
+        for ticker, weight in top
+    ]
+
+
+def _build_universe_status(state: dict) -> dict:
+    metadata = state.get("data_metadata") or {}
+
+    configured_count = metadata.get("configured_count")
+    requested_count = metadata.get("requested_count")
+    surviving_count = metadata.get("surviving_count")
+    auto_pruned_count = metadata.get("auto_pruned_count", 0)
+    dropped_after_cleaning = metadata.get("dropped_after_cleaning", [])
+    final_missing_tickers = metadata.get("final_missing_tickers", [])
+
+    effective_universe_count = surviving_count
+    if effective_universe_count is None:
+        effective_universe_count = len(state.get("tickers", []))
+
+    return {
+        "configured_count": configured_count,
+        "requested_count": requested_count,
+        "surviving_count": surviving_count,
+        "effective_universe_count": effective_universe_count,
+        "auto_pruned_count": auto_pruned_count,
+        "auto_pruned_tickers": metadata.get("auto_pruned_tickers", []),
+        "currently_auto_pruned_tickers": metadata.get(
+            "currently_auto_pruned_tickers", []
+        ),
+        "newly_auto_pruned_tickers": metadata.get(
+            "newly_auto_pruned_tickers", []
+        ),
+        "dropped_after_cleaning": dropped_after_cleaning,
+        "final_missing_tickers": final_missing_tickers,
+        "cache_status": state.get("cache_status"),
+        "cache_warning": state.get("warning"),
+        "refresh_summary": metadata.get("summary"),
+    }
+
+
+def _build_explanation_input_block(
+    *,
+    target_return: float,
+    max_volatility: float | None,
+    portfolio_return: float,
+    portfolio_volatility: float,
+    weights: dict[str, float],
+    category_exposure: list[dict],
+    risk_contributions: dict[str, float],
+    diversification_ratio: float,
+    concentration: float,
+    active_positions: int,
+    largest_weight: float,
+    simulation_summary: dict,
+    universe_status: dict,
+    market_data: dict,
+) -> dict:
+    top_positions = _build_top_positions(weights, limit=5)
+    top_risk_contributors = sorted(
+        risk_contributions.items(),
+        key=lambda x: x[1],
+        reverse=True,
+    )[:5]
+
+    top_risk_contributors = [
+        {
+            "ticker": ticker,
+            "name": TICKER_TO_NAME.get(ticker, ticker),
+            "category": TICKER_TO_CATEGORY.get(ticker, "Uncategorized"),
+            "risk_contribution": round(float(value), 8),
+        }
+        for ticker, value in top_risk_contributors
+    ]
+
+    top_categories = category_exposure[:5]
+
+    return {
+        "portfolio_objective": {
+            "target_return": round(float(target_return), 8),
+            "target_return_percent": round(float(target_return) * 100, 4),
+            "max_volatility": None if max_volatility is None else round(float(max_volatility), 8),
+            "max_volatility_percent": None if max_volatility is None else round(float(max_volatility) * 100, 4),
+        },
+        "portfolio_outcome": {
+            "expected_return": round(float(portfolio_return), 8),
+            "expected_return_percent": round(float(portfolio_return) * 100, 4),
+            "volatility": round(float(portfolio_volatility), 8),
+            "volatility_percent": round(float(portfolio_volatility) * 100, 4),
+            "active_positions": active_positions,
+            "largest_weight": round(float(largest_weight), 8),
+            "largest_weight_percent": round(float(largest_weight) * 100, 4),
+            "diversification_ratio": round(float(diversification_ratio), 6),
+            "concentration": round(float(concentration), 6),
+        },
+        "top_positions": top_positions,
+        "top_categories": top_categories,
+        "top_risk_contributors": top_risk_contributors,
+        "simulation": {
+            "mean_return": round(float(simulation_summary["mean_return"]), 8),
+            "median_return": round(float(simulation_summary["median_return"]), 8),
+            "loss_probability": round(float(simulation_summary["loss_probability"]), 8),
+            "percentile_5": round(float(simulation_summary["percentile_5"]), 8),
+            "percentile_95": round(float(simulation_summary["percentile_95"]), 8),
+        },
+        "universe_status": universe_status,
+        "market_data": market_data,
+    }
+
+
 @app.get("/")
 def root():
     return {
@@ -145,8 +287,12 @@ def refresh_data():
 
 @app.post("/portfolio")
 def generate_portfolio(request: PortfolioRequest):
+    total_start = time.perf_counter()
+
     try:
+        load_state_start = time.perf_counter()
         state = load_cached_market_state(require_valid=False)
+        load_state_seconds = round(time.perf_counter() - load_state_start, 6)
 
         price_data = state["price_data"]
         expected_returns = state["expected_returns"]
@@ -160,8 +306,11 @@ def generate_portfolio(request: PortfolioRequest):
             else None
         )
 
+        max_return_start = time.perf_counter()
         max_return = compute_max_feasible_return(mu=expected_returns)
+        max_return_seconds = round(time.perf_counter() - max_return_start, 6)
 
+        optimize_start = time.perf_counter()
         weights = optimize_portfolio(
             target_return=target_return,
             price_data=price_data,
@@ -169,8 +318,11 @@ def generate_portfolio(request: PortfolioRequest):
             expected_returns=expected_returns,
             cov_matrix=cov_matrix,
         )
+        optimize_seconds = round(time.perf_counter() - optimize_start, 6)
 
         weights = {k: float(v) for k, v in dict(weights).items()}
+
+        metrics_start = time.perf_counter()
 
         portfolio_return = float(
             compute_portfolio_return(weights, expected_returns)
@@ -191,6 +343,10 @@ def generate_portfolio(request: PortfolioRequest):
             compute_diversification_ratio(weights, cov_matrix)
         )
 
+        metrics_seconds = round(time.perf_counter() - metrics_start, 6)
+
+        simulation_start = time.perf_counter()
+
         sim_returns = simulate_portfolio_annual_returns(
             weights=weights,
             expected_returns=expected_returns,
@@ -200,7 +356,57 @@ def generate_portfolio(request: PortfolioRequest):
         sim_summary = summarize_simulation_results(sim_returns)
         sim_chart = prepare_simulation_chart_data(sim_returns)
 
+        simulation_seconds = round(time.perf_counter() - simulation_start, 6)
+
+        structure_start = time.perf_counter()
+
         recompute = get_recompute_schedule(portfolio_volatility)
+
+        weights_percent = {k: v * 100 for k, v in weights.items()}
+
+        meaningful_positions = [k for k, v in weights.items() if v > 0.001]
+        active_positions = len(meaningful_positions)
+        largest_weight = max(weights.values()) if weights else 0.0
+
+        risk_effects = risk_contributions
+
+        chart_data = [
+            {"ticker": k, "weight": float(v)}
+            for k, v in weights.items()
+            if v > 0.001
+        ]
+
+        category_exposure = _build_category_exposure(weights)
+        universe_status = _build_universe_status(state)
+
+        simulation_full = {
+            "mean": sim_summary["mean_return"],
+            "median": sim_summary["median_return"],
+            "loss_probability": sim_summary["loss_probability"],
+            "p5": sim_summary["percentile_5"],
+            "p95": sim_summary["percentile_95"],
+        }
+
+        explanation_input = _build_explanation_input_block(
+            target_return=target_return,
+            max_volatility=max_volatility,
+            portfolio_return=portfolio_return,
+            portfolio_volatility=portfolio_volatility,
+            weights=weights,
+            category_exposure=category_exposure,
+            risk_contributions=risk_contributions,
+            diversification_ratio=diversification_ratio,
+            concentration=concentration,
+            active_positions=active_positions,
+            largest_weight=largest_weight,
+            simulation_summary=sim_summary,
+            universe_status=universe_status,
+            market_data=_serialize_market_state(state),
+        )
+
+        structure_seconds = round(time.perf_counter() - structure_start, 6)
+
+        explanation_start = time.perf_counter()
 
         explanation = generate_explanation(
             desired_return=target_return,
@@ -222,26 +428,18 @@ def generate_portfolio(request: PortfolioRequest):
             simulation_percentile_95=sim_summary["percentile_95"],
         )
 
-        weights_percent = {k: v * 100 for k, v in weights.items()}
+        explanation_seconds = round(time.perf_counter() - explanation_start, 6)
+        total_seconds = round(time.perf_counter() - total_start, 6)
 
-        meaningful_positions = [k for k, v in weights.items() if v > 0.001]
-        active_positions = len(meaningful_positions)
-        largest_weight = max(weights.values()) if weights else 0.0
-
-        risk_effects = risk_contributions
-
-        chart_data = [
-            {"ticker": k, "weight": float(v)}
-            for k, v in weights.items()
-            if v > 0.001
-        ]
-
-        simulation_full = {
-            "mean": sim_summary["mean_return"],
-            "median": sim_summary["median_return"],
-            "loss_probability": sim_summary["loss_probability"],
-            "p5": sim_summary["percentile_5"],
-            "p95": sim_summary["percentile_95"],
+        portfolio_timing = {
+            "load_cached_market_state_seconds": load_state_seconds,
+            "compute_max_return_seconds": max_return_seconds,
+            "optimization_seconds": optimize_seconds,
+            "portfolio_metrics_seconds": metrics_seconds,
+            "simulation_seconds": simulation_seconds,
+            "response_structuring_seconds": structure_seconds,
+            "explanation_seconds": explanation_seconds,
+            "total_portfolio_request_seconds": total_seconds,
         }
 
         return {
@@ -255,7 +453,9 @@ def generate_portfolio(request: PortfolioRequest):
             "weights_percent": weights_percent,
             "tickers": tickers,
             "ticker_to_name": TICKER_TO_NAME,
+            "ticker_to_category": TICKER_TO_CATEGORY,
             "chart_data": chart_data,
+            "category_exposure": category_exposure,
             "risk_effects": risk_effects,
             "risk_contributions": risk_contributions,
             "concentration": concentration,
@@ -263,11 +463,15 @@ def generate_portfolio(request: PortfolioRequest):
             "active_positions": active_positions,
             "meaningful_positions": meaningful_positions,
             "largest_weight": largest_weight,
+            "top_positions": _build_top_positions(weights, limit=5),
             "recompute_interval": recompute,
             "recompute_schedule": recompute,
             "simulation": simulation_full,
             "simulation_summary": sim_summary,
             "simulation_chart": sim_chart,
+            "portfolio_timing": portfolio_timing,
+            "universe_status": universe_status,
+            "explanation_input": explanation_input,
             "explanation": explanation,
             "market_data": _serialize_market_state(state),
         }

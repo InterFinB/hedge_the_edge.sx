@@ -1,7 +1,6 @@
 from .summary import generate_portfolio_summary
 from .risk import generate_risk_commentary
 from .simulation import generate_simulation_commentary
-from .watch_for import generate_watch_for
 from .takeaways import generate_takeaways
 from .vocabulary import generate_vocabulary
 
@@ -23,11 +22,6 @@ def generate_explanation(
     simulation_percentile_5=None,
     simulation_percentile_95=None,
 ):
-
-    # -----------------------------
-    # Portfolio summary
-    # -----------------------------
-
     portfolio_summary = generate_portfolio_summary(
         desired_return=desired_return,
         expected_portfolio_return=expected_portfolio_return,
@@ -38,18 +32,10 @@ def generate_explanation(
         max_weight_constraint=max_weight_constraint,
     )
 
-    # -----------------------------
-    # Risk commentary
-    # -----------------------------
-
     risk_commentary = generate_risk_commentary(
         weights=weights,
         risk_contributions=risk_contributions,
     )
-
-    # -----------------------------
-    # Simulation commentary
-    # -----------------------------
 
     simulation_commentary = generate_simulation_commentary(
         feasible=feasible,
@@ -60,27 +46,7 @@ def generate_explanation(
         simulation_percentile_95=simulation_percentile_95,
     )
 
-    # -----------------------------
-    # Watch For
-    # -----------------------------
-
-    watch_for = generate_watch_for(
-        weights=weights,
-        risk_contributions=risk_contributions,
-        concentration=concentration,
-        diversification_ratio=diversification_ratio,
-        portfolio_volatility=portfolio_volatility,
-        expected_portfolio_return=expected_portfolio_return,
-        simulation_loss_probability=simulation_loss_probability,
-        simulation_percentile_5=simulation_percentile_5,
-        simulation_percentile_95=simulation_percentile_95,
-        max_volatility=max_volatility,
-        max_weight_constraint=max_weight_constraint,
-    )
-
-    # -----------------------------
-    # Takeaways
-    # -----------------------------
+    watch_for = []
 
     takeaways = generate_takeaways(
         concentration=concentration,
@@ -90,10 +56,6 @@ def generate_explanation(
         portfolio_volatility=portfolio_volatility,
         desired_return=desired_return,
     )
-
-    # -----------------------------
-    # Vocabulary detection
-    # -----------------------------
 
     used_terms = set()
 
@@ -107,7 +69,7 @@ def generate_explanation(
             "Concentration",
         })
 
-    if risk_commentary or watch_for:
+    if risk_commentary:
         used_terms.update({
             "Risk contribution",
             "Correlation",
@@ -130,7 +92,6 @@ def generate_explanation(
         for bullet in (
             portfolio_summary
             + risk_commentary
-            + watch_for
         )
     ):
         used_terms.update({
@@ -138,17 +99,7 @@ def generate_explanation(
             "Constraint",
         })
 
-    # -----------------------------
-    # Vocabulary
-    # -----------------------------
-
-    vocabulary = generate_vocabulary(
-        sorted(used_terms)
-    )
-
-    # -----------------------------
-    # Final structure
-    # -----------------------------
+    vocabulary = generate_vocabulary(sorted(used_terms))
 
     return {
         "portfolio_summary": portfolio_summary,
