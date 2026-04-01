@@ -53,6 +53,13 @@ export type TopPositionDatum = {
   weight_percent?: number;
 };
 
+export type RiskContributorDatum = {
+  ticker: string;
+  name?: string;
+  category?: string;
+  risk_contribution?: number;
+};
+
 export type PortfolioTiming = {
   load_cached_market_state_seconds?: number;
   compute_max_return_seconds?: number;
@@ -104,12 +111,7 @@ export type ExplanationInputBlock = {
   };
   top_positions?: TopPositionDatum[];
   top_categories?: CategoryExposureDatum[];
-  top_risk_contributors?: Array<{
-    ticker: string;
-    name?: string;
-    category?: string;
-    risk_contribution?: number;
-  }>;
+  top_risk_contributors?: RiskContributorDatum[];
   simulation?: SimulationSummaryData;
   universe_status?: UniverseStatus;
   market_data?: unknown;
@@ -140,6 +142,62 @@ export type MarketDataStatus = {
   tickers?: string[];
 };
 
+export type AIContext = {
+  portfolio_objective: {
+    target_return: number;
+    target_return_percent: number;
+    max_volatility?: number | null;
+    max_volatility_percent?: number | null;
+  };
+  portfolio_outcome: {
+    expected_return: number;
+    expected_return_percent: number;
+    volatility: number;
+    volatility_percent: number;
+    active_positions: number;
+    largest_weight: number;
+    largest_weight_percent: number;
+    diversification_ratio: number;
+    concentration: number;
+    pre_prune_assets?: number | null;
+    post_prune_assets?: number | null;
+    concentration_threshold_used?: number | null;
+    concentration_capped: boolean;
+  };
+  top_positions: TopPositionDatum[];
+  top_categories: CategoryExposureDatum[];
+  top_risk_contributors: RiskContributorDatum[];
+  simulation: {
+    mean_return: number;
+    median_return: number;
+    loss_probability: number;
+    percentile_5: number;
+    percentile_95: number;
+  };
+  universe_status: UniverseStatus;
+  market_data: Record<string, unknown>;
+  explanation?: ExplanationBlock | null;
+  selection_context?: null;
+};
+
+export type AskPortfolioRequest = {
+  question: string;
+  ai_context: AIContext;
+  conversation?: Array<{
+    role: "user" | "assistant";
+    content: string;
+  }>;
+};
+
+export type AskPortfolioResponse = {
+  answer: string;
+  reasoning_summary: string[];
+  watch_for: string[];
+  follow_up_suggestions: string[];
+  source?: string | null;
+  prompt_version?: string | null;
+};
+
 export type PortfolioResponse = {
   desired_return?: number;
   target_return?: number;
@@ -147,23 +205,18 @@ export type PortfolioResponse = {
   portfolio_return?: number;
   portfolio_volatility: number;
   max_return?: number;
-
   weights: Record<string, number>;
   weights_percent?: Record<string, number>;
   tickers?: string[];
   ticker_to_name?: Record<string, string>;
   ticker_to_category?: Record<string, string>;
-
   chart_data?: ChartDatum[];
   category_exposure?: CategoryExposureDatum[];
   top_positions?: TopPositionDatum[];
-
   risk_effects?: Record<string, number> | number[];
   risk_contributions: Record<string, number> | number[];
-
   concentration?: number;
   diversification_ratio?: number;
-
   active_positions?: number;
   meaningful_positions?: string[];
   largest_weight?: number;
@@ -171,18 +224,15 @@ export type PortfolioResponse = {
   post_prune_assets?: number;
   concentration_threshold_used?: number;
   concentration_capped?: boolean;
-
   recompute_interval?: string | number | { interval_label?: string };
   recompute_schedule?: string | number;
-
   simulation?: SimulationCompact;
   simulation_summary?: SimulationSummaryData;
   simulation_chart?: unknown;
-
   portfolio_timing?: PortfolioTiming;
   universe_status?: UniverseStatus;
   explanation_input?: ExplanationInputBlock;
-
   explanation?: ExplanationBlock;
   market_data?: MarketDataStatus;
+  ai_context?: AIContext;
 };

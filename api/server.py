@@ -8,12 +8,12 @@ import sys
 import os
 import traceback
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from portfolio_engine.config import (
     TICKER_TO_NAME,
     TICKER_TO_CATEGORY,
 )
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from portfolio_engine import data_loader
 from portfolio_engine.data_loader import load_cached_market_state
@@ -37,6 +37,10 @@ from portfolio_engine.simulation import (
 )
 from portfolio_engine.recompute_schedule import get_recompute_schedule
 from explanation_layer import generate_explanation
+
+from ai.context.builder import build_ai_context
+from ai.schemas import AskPortfolioRequest
+from ai.services.ask_portfolio_service import ask_portfolio_question
 
 
 app = FastAPI(title="RM Agent API")
@@ -164,85 +168,6 @@ def _build_universe_status(state: dict) -> dict:
     }
 
 
-def _build_explanation_input_block(
-    *,
-    target_return: float,
-    max_volatility: float | None,
-    portfolio_return: float,
-    portfolio_volatility: float,
-    weights: dict[str, float],
-    category_exposure: list[dict],
-    risk_contributions: dict[str, float],
-    diversification_ratio: float,
-    concentration: float,
-    active_positions: int,
-    largest_weight: float,
-    pre_prune_assets: int | None,
-    post_prune_assets: int | None,
-    concentration_threshold_used: float | None,
-    concentration_capped: bool,
-    simulation_summary: dict,
-    universe_status: dict,
-    market_data: dict,
-) -> dict:
-    top_positions = _build_top_positions(weights, limit=5)
-    top_risk_contributors = sorted(
-        risk_contributions.items(),
-        key=lambda x: x[1],
-        reverse=True,
-    )[:5]
-
-    top_risk_contributors = [
-        {
-            "ticker": ticker,
-            "name": TICKER_TO_NAME.get(ticker, ticker),
-            "category": TICKER_TO_CATEGORY.get(ticker, "Uncategorized"),
-            "risk_contribution": round(float(value), 8),
-        }
-        for ticker, value in top_risk_contributors
-    ]
-
-    top_categories = category_exposure[:5]
-
-    return {
-        "portfolio_objective": {
-            "target_return": round(float(target_return), 8),
-            "target_return_percent": round(float(target_return) * 100, 4),
-            "max_volatility": None if max_volatility is None else round(float(max_volatility), 8),
-            "max_volatility_percent": None if max_volatility is None else round(float(max_volatility) * 100, 4),
-        },
-        "portfolio_outcome": {
-            "expected_return": round(float(portfolio_return), 8),
-            "expected_return_percent": round(float(portfolio_return) * 100, 4),
-            "volatility": round(float(portfolio_volatility), 8),
-            "volatility_percent": round(float(portfolio_volatility) * 100, 4),
-            "active_positions": active_positions,
-            "largest_weight": round(float(largest_weight), 8),
-            "largest_weight_percent": round(float(largest_weight) * 100, 4),
-            "diversification_ratio": round(float(diversification_ratio), 6),
-            "concentration": round(float(concentration), 6),
-            "pre_prune_assets": pre_prune_assets,
-            "post_prune_assets": post_prune_assets,
-            "concentration_threshold_used": None
-            if concentration_threshold_used is None
-            else round(float(concentration_threshold_used), 6),
-            "concentration_capped": concentration_capped,
-        },
-        "top_positions": top_positions,
-        "top_categories": top_categories,
-        "top_risk_contributors": top_risk_contributors,
-        "simulation": {
-            "mean_return": round(float(simulation_summary["mean_return"]), 8),
-            "median_return": round(float(simulation_summary["median_return"]), 8),
-            "loss_probability": round(float(simulation_summary["loss_probability"]), 8),
-            "percentile_5": round(float(simulation_summary["percentile_5"]), 8),
-            "percentile_95": round(float(simulation_summary["percentile_95"]), 8),
-        },
-        "universe_status": universe_status,
-        "market_data": market_data,
-    }
-
-
 @app.get("/")
 def root():
     return {
@@ -347,6 +272,9 @@ def generate_portfolio(request: PortfolioRequest):
             weights,
             cov_matrix,
         )
+        risk_contributions = {
+            k: float(v) for k, v in dict(risk_contributions).items()
+        }
 
         concentration = float(compute_concentration(weights))
 
@@ -373,7 +301,7 @@ def generate_portfolio(request: PortfolioRequest):
 
         recompute = get_recompute_schedule(portfolio_volatility)
 
-        weights_percent = {k: v * 100 for k, v in weights.items()}
+        weights_percent = {k: float(v) * 100 for k, v in weights.items()}
 
         meaningful_positions = [k for k, v in weights.items() if v > 0.001]
         active_positions = len(meaningful_positions)
@@ -398,6 +326,7 @@ def generate_portfolio(request: PortfolioRequest):
 
         category_exposure = _build_category_exposure(weights)
         universe_status = _build_universe_status(state)
+        market_data = _serialize_market_state(state)
 
         simulation_full = {
             "mean": sim_summary["mean_return"],
@@ -407,7 +336,7 @@ def generate_portfolio(request: PortfolioRequest):
             "p95": sim_summary["percentile_95"],
         }
 
-        explanation_input = _build_explanation_input_block(
+        explanation_input = build_ai_context(
             target_return=target_return,
             max_volatility=max_volatility,
             portfolio_return=portfolio_return,
@@ -425,7 +354,8 @@ def generate_portfolio(request: PortfolioRequest):
             concentration_capped=concentration_capped,
             simulation_summary=sim_summary,
             universe_status=universe_status,
-            market_data=_serialize_market_state(state),
+            market_data=market_data,
+            explanation=None,
         )
 
         structure_seconds = round(time.perf_counter() - structure_start, 6)
@@ -453,6 +383,29 @@ def generate_portfolio(request: PortfolioRequest):
         )
 
         explanation_seconds = round(time.perf_counter() - explanation_start, 6)
+
+        ai_context = build_ai_context(
+            target_return=target_return,
+            max_volatility=max_volatility,
+            portfolio_return=portfolio_return,
+            portfolio_volatility=portfolio_volatility,
+            weights=weights,
+            category_exposure=category_exposure,
+            risk_contributions=risk_contributions,
+            diversification_ratio=diversification_ratio,
+            concentration=concentration,
+            active_positions=active_positions,
+            largest_weight=largest_weight,
+            pre_prune_assets=pre_prune_assets,
+            post_prune_assets=post_prune_assets,
+            concentration_threshold_used=concentration_threshold_used,
+            concentration_capped=concentration_capped,
+            simulation_summary=sim_summary,
+            universe_status=universe_status,
+            market_data=market_data,
+            explanation=explanation,
+        )
+
         total_seconds = round(time.perf_counter() - total_start, 6)
 
         portfolio_timing = {
@@ -465,7 +418,9 @@ def generate_portfolio(request: PortfolioRequest):
             "explanation_seconds": explanation_seconds,
             "total_portfolio_request_seconds": total_seconds,
         }
-
+        
+        print("RETURNING AI CONTEXT:", ai_context.keys())
+        
         return {
             "desired_return": target_return,
             "target_return": target_return,
@@ -501,7 +456,8 @@ def generate_portfolio(request: PortfolioRequest):
             "universe_status": universe_status,
             "explanation_input": explanation_input,
             "explanation": explanation,
-            "market_data": _serialize_market_state(state),
+            "market_data": market_data,
+            "ai_context": ai_context,
         }
 
     except ValueError as e:
@@ -535,4 +491,22 @@ def generate_portfolio(request: PortfolioRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected server error: {str(e)}",
+        )
+
+
+@app.post("/ask-portfolio")
+def ask_portfolio(request: AskPortfolioRequest):
+    try:
+        response = ask_portfolio_question(
+            question=request.question,
+            ai_context=request.ai_context,
+            conversation=request.conversation,
+        )
+        return response.model_dump()
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected AI server error: {str(e)}",
         )
