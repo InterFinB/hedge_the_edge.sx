@@ -40,7 +40,6 @@ from explanation_layer import generate_explanation
 
 from ai.context.builder import build_ai_context
 from ai.schemas import AskPortfolioRequest
-from ai.services.ask_portfolio_service import ask_portfolio_question
 
 
 app = FastAPI(title="RM Agent API")
@@ -497,6 +496,8 @@ def generate_portfolio(request: PortfolioRequest):
 @app.post("/ask-portfolio")
 def ask_portfolio(request: AskPortfolioRequest):
     try:
+        from ai.services.ask_portfolio_service import ask_portfolio_question
+
         response = ask_portfolio_question(
             question=request.question,
             ai_context=request.ai_context,
