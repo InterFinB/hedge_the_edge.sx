@@ -118,6 +118,9 @@ export default function Home() {
 
       setResult(data);
 
+      console.log("DEPLOYED PORTFOLIO RESPONSE", data);
+      console.log("DEPLOYED AI CONTEXT", data.ai_context);
+
       const backendWarning =
         typeof data?.market_data?.warning === "string"
           ? data.market_data.warning
@@ -256,7 +259,9 @@ export default function Home() {
 
               <ExplanationSection explanation={result.explanation} />
 
-              <PortfolioAskBar aiContext={result.ai_context ?? null} />
+              <div className="rounded-[24px] border border-fuchsia-300 bg-fuchsia-50 px-5 py-4">
+              DEPLOYED ASK BAR SLOT IS RENDERING
+              </div>
 
               <section className="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
                 <WeightsTable
