@@ -180,13 +180,15 @@ export type AIContext = {
   selection_context?: null;
 };
 
+export type PortfolioConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export type AskPortfolioRequest = {
   question: string;
   ai_context: AIContext;
-  conversation?: Array<{
-    role: "user" | "assistant";
-    content: string;
-  }>;
+  conversation?: PortfolioConversationMessage[];
 };
 
 export type AskPortfolioResponse = {
@@ -234,5 +236,5 @@ export type PortfolioResponse = {
   explanation_input?: ExplanationInputBlock;
   explanation?: ExplanationBlock;
   market_data?: MarketDataStatus;
-  ai_context?: AIContext;
+  ai_context?: AIContext | null;
 };

@@ -4,6 +4,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+# =========================
+# CORE BLOCKS
+# =========================
+
 class PortfolioObjective(BaseModel):
     target_return: float
     target_return_percent: float
@@ -26,6 +30,10 @@ class PortfolioOutcome(BaseModel):
     concentration_threshold_used: float | None = None
     concentration_capped: bool = False
 
+
+# =========================
+# SUPPORT DATA
+# =========================
 
 class TopPositionDatum(BaseModel):
     ticker: str
@@ -72,18 +80,30 @@ class UniverseStatus(BaseModel):
     refresh_summary: str | None = None
 
 
+# =========================
+# AI CONTEXT
+# =========================
+
 class AIContext(BaseModel):
     portfolio_objective: PortfolioObjective
     portfolio_outcome: PortfolioOutcome
+
     top_positions: list[TopPositionDatum] = Field(default_factory=list)
     top_categories: list[CategoryExposureDatum] = Field(default_factory=list)
     top_risk_contributors: list[RiskContributorDatum] = Field(default_factory=list)
+
     simulation: SimulationSummaryData
     universe_status: UniverseStatus
+
     market_data: dict[str, Any] = Field(default_factory=dict)
+
     explanation: dict[str, Any] | str | None = None
     selection_context: None = None
 
+
+# =========================
+# CHAT STRUCTURE
+# =========================
 
 class ConversationTurn(BaseModel):
     role: Literal["user", "assistant"]

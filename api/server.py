@@ -41,6 +41,13 @@ from explanation_layer import generate_explanation
 from ai.context.builder import build_ai_context
 from ai.schemas import AskPortfolioRequest
 
+try:
+    from ai.services.ask_portfolio_service import ask_portfolio_question
+    ASK_PORTFOLIO_SERVICE_AVAILABLE = True
+except Exception:
+    ask_portfolio_question = None
+    ASK_PORTFOLIO_SERVICE_AVAILABLE = False
+
 
 app = FastAPI(title="RM Agent API")
 
@@ -102,8 +109,8 @@ def _build_category_exposure(weights: dict[str, float]) -> list[dict]:
     exposure = defaultdict(float)
 
     for ticker, weight in weights.items():
-        category = TICKER_TO_CATEGORY.get(ticker, "Uncategorized")
-        exposure[category] += float(weight)
+      category = TICKER_TO_CATEGORY.get(ticker, "Uncategorized")
+      exposure[category] += float(weight)
 
     result = [
         {
@@ -172,6 +179,7 @@ def root():
     return {
         "message": "RM Agent API is running",
         "allowed_origins": allowed_origins,
+        "ask_portfolio_service_available": ASK_PORTFOLIO_SERVICE_AVAILABLE,
     }
 
 
@@ -417,9 +425,7 @@ def generate_portfolio(request: PortfolioRequest):
             "explanation_seconds": explanation_seconds,
             "total_portfolio_request_seconds": total_seconds,
         }
-        
-        print("RETURNING AI CONTEXT:", ai_context.keys())
-        
+
         return {
             "desired_return": target_return,
             "target_return": target_return,
@@ -495,9 +501,16 @@ def generate_portfolio(request: PortfolioRequest):
 
 @app.post("/ask-portfolio")
 def ask_portfolio(request: AskPortfolioRequest):
-    try:
-        from ai.services.ask_portfolio_service import ask_portfolio_question
+    if not ASK_PORTFOLIO_SERVICE_AVAILABLE or ask_portfolio_question is None:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "AI portfolio chat service is not available. "
+                "Make sure ai/services/ask_portfolio_service.py exists in the deployed backend."
+            ),
+        )
 
+    try:
         response = ask_portfolio_question(
             question=request.question,
             ai_context=request.ai_context,

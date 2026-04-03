@@ -118,9 +118,6 @@ export default function Home() {
 
       setResult(data);
 
-      console.log("DEPLOYED PORTFOLIO RESPONSE", data);
-      console.log("DEPLOYED AI CONTEXT", data.ai_context);
-
       const backendWarning =
         typeof data?.market_data?.warning === "string"
           ? data.market_data.warning
@@ -161,7 +158,8 @@ export default function Home() {
                 </h1>
                 <p className="max-w-3xl text-sm leading-6 text-slate-600 sm:text-[15px]">
                   Generate a minimum-risk portfolio for a target return and review
-                  allocation, diagnostics, simulation, and explanation in one place.
+                  allocation, diagnostics, simulation, explanation, and AI Q&amp;A in
+                  one place.
                 </p>
               </div>
 
@@ -203,7 +201,9 @@ export default function Home() {
                 </div>
 
                 <div>
-                  <span className="font-semibold text-slate-900">Assets available:</span>{" "}
+                  <span className="font-semibold text-slate-900">
+                    Assets available:
+                  </span>{" "}
                   {marketData.num_assets ?? result?.tickers?.length ?? 0}
                 </div>
 
@@ -259,9 +259,11 @@ export default function Home() {
 
               <ExplanationSection explanation={result.explanation} />
 
-              <div className="rounded-[24px] border border-fuchsia-300 bg-fuchsia-50 px-5 py-4">
-              DEPLOYED ASK BAR SLOT IS RENDERING
-              </div>
+              <PortfolioAskBar
+                aiContext={result.ai_context ?? null}
+                explanation={result.explanation}
+                disabled={loading}
+              />
 
               <section className="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
                 <WeightsTable

@@ -15,6 +15,12 @@ import {
   AreaChart,
   Area,
 } from "recharts";
+import type {
+  CategoryExposureDatum,
+  ExplanationBlock,
+  PortfolioResponse,
+  TopPositionDatum,
+} from "@/types/portfolio";
 
 /* =========================================================
    helpers
@@ -251,7 +257,7 @@ export function StatusBanner({
    portfolio overview
 ========================================================= */
 
-export function PortfolioOverview({ result }: { result: any }) {
+export function PortfolioOverview({ result }: { result: PortfolioResponse }) {
   const desiredReturn = result.desired_return ?? result.target_return;
   const expectedReturn =
     result.expected_portfolio_return ?? result.portfolio_return;
@@ -275,10 +281,7 @@ export function PortfolioOverview({ result }: { result: any }) {
     },
     {
       title: "Positions",
-      value:
-        result.post_prune_assets ??
-        result.active_positions ??
-        "—",
+      value: result.post_prune_assets ?? result.active_positions ?? "—",
     },
     {
       title: "Diversification ratio",
@@ -499,7 +502,7 @@ export function AllocationChart({
 export function CategoryExposureChart({
   categoryExposure,
 }: {
-  categoryExposure?: { category: string; weight: number; weight_percent?: number }[];
+  categoryExposure?: CategoryExposureDatum[];
 }) {
   const CATEGORY_COLORS = [
     "#0f766e",
@@ -605,13 +608,7 @@ export function CategoryExposureChart({
 export function TopPositionsPanel({
   topPositions,
 }: {
-  topPositions?: {
-    ticker: string;
-    name?: string;
-    category?: string;
-    weight: number;
-    weight_percent?: number;
-  }[];
+  topPositions?: TopPositionDatum[];
 }) {
   const rows = (topPositions || []).filter((x) => x.weight > 0);
 
@@ -829,7 +826,7 @@ export function SimulationDistributionChart({
    simulation summary
 ========================================================= */
 
-export function SimulationSummary({ result }: { result: any }) {
+export function SimulationSummary({ result }: { result: PortfolioResponse }) {
   const s = result.simulation_summary;
   const compact = result.simulation;
 
@@ -1076,7 +1073,11 @@ function CommentaryCard({
    explanation
 ========================================================= */
 
-export function ExplanationSection({ explanation }: { explanation: any }) {
+export function ExplanationSection({
+  explanation,
+}: {
+  explanation: ExplanationBlock | undefined;
+}) {
   const [activeTab, setActiveTab] = useState<
     "overview" | "risk" | "simulation" | "actions" | "vocabulary"
   >("overview");
@@ -1088,15 +1089,21 @@ export function ExplanationSection({ explanation }: { explanation: any }) {
       ? normalizeTextList(explanation)
       : normalizeTextList(explanation?.portfolio_summary);
 
-  const riskCommentary = normalizeTextList(explanation?.risk_commentary);
-  const simulationCommentary = normalizeTextList(
-    explanation?.simulation_commentary
-  );
+  const riskCommentary =
+    typeof explanation === "string"
+      ? []
+      : normalizeTextList(explanation?.risk_commentary);
+
+  const simulationCommentary =
+    typeof explanation === "string"
+      ? []
+      : normalizeTextList(explanation?.simulation_commentary);
 
   const fallbackSummary =
     portfolioSummary.length === 0 &&
     riskCommentary.length === 0 &&
-    simulationCommentary.length === 0
+    simulationCommentary.length === 0 &&
+    typeof explanation !== "string"
       ? [
           ...normalizeTextList(explanation?.summary),
           ...normalizeTextList(explanation?.text),
@@ -1106,9 +1113,14 @@ export function ExplanationSection({ explanation }: { explanation: any }) {
         ]
       : [];
 
-  const watch = normalizeTextList(explanation?.watch_for);
-  const takeaways = normalizeTextList(explanation?.takeaways);
-  const vocabularyEntries = normalizeVocabulary(explanation?.vocabulary);
+  const watch =
+    typeof explanation === "string" ? [] : normalizeTextList(explanation?.watch_for);
+
+  const takeaways =
+    typeof explanation === "string" ? [] : normalizeTextList(explanation?.takeaways);
+
+  const vocabularyEntries =
+    typeof explanation === "string" ? [] : normalizeVocabulary(explanation?.vocabulary);
 
   const mainSummary =
     portfolioSummary.length > 0
@@ -1307,7 +1319,7 @@ export function ExplanationSection({ explanation }: { explanation: any }) {
             <div>
               {vocabularyEntries.length > 0 ? (
                 <div className="grid gap-3 md:grid-cols-2">
-                  {vocabularyEntries.map((item: any, index: number) => (
+                  {vocabularyEntries.map((item, index) => (
                     <div
                       key={`${item.term}-${index}`}
                       className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 shadow-sm"
@@ -1371,26 +1383,21 @@ export function DiagnosticsPanel({
   const holdingsShown = postPruneAssets ?? meaningfulPositionsCount;
 
   let concentrationLabel = "Balanced";
-  let concentrationTone =
-    "border-slate-200 bg-slate-50 text-slate-700";
+  let concentrationTone = "border-slate-200 bg-slate-50 text-slate-700";
 
   if (typeof holdingsShown === "number") {
     if (holdingsShown <= 10) {
       concentrationLabel = "Highly concentrated";
-      concentrationTone =
-        "border-amber-200 bg-amber-50 text-amber-800";
+      concentrationTone = "border-amber-200 bg-amber-50 text-amber-800";
     } else if (holdingsShown <= 15) {
       concentrationLabel = "Concentrated";
-      concentrationTone =
-        "border-blue-200 bg-blue-50 text-blue-800";
+      concentrationTone = "border-blue-200 bg-blue-50 text-blue-800";
     } else if (holdingsShown <= 20) {
       concentrationLabel = "Balanced";
-      concentrationTone =
-        "border-emerald-200 bg-emerald-50 text-emerald-800";
+      concentrationTone = "border-emerald-200 bg-emerald-50 text-emerald-800";
     } else {
       concentrationLabel = "Broad";
-      concentrationTone =
-        "border-slate-200 bg-slate-50 text-slate-700";
+      concentrationTone = "border-slate-200 bg-slate-50 text-slate-700";
     }
   }
 
