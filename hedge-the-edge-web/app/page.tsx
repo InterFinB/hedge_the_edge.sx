@@ -256,9 +256,7 @@ export default function Home() {
 
               <ExplanationSection explanation={result.explanation} />
 
-              <div className="rounded-2xl border border-red-300 bg-red-50 p-4">
-                TEST ASK BAR SLOT
-              </div>
+              <PortfolioAskBar aiContext={result.ai_context ?? null} />
 
               <section className="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
                 <WeightsTable
