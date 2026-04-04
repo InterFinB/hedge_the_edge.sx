@@ -118,8 +118,6 @@ class AskPortfolioRequest(BaseModel):
 
 class AskPortfolioResponse(BaseModel):
     answer: str
-    reasoning_summary: list[str] = Field(default_factory=list)
-    watch_for: list[str] = Field(default_factory=list)
-    follow_up_suggestions: list[str] = Field(default_factory=list)
+    why: list[str] = Field(default_factory=list)
     source: str | None = None
     prompt_version: str | None = None

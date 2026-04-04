@@ -18,11 +18,17 @@ def ask_portfolio_question(
     ai_context: AIContext,
     conversation: list[ConversationTurn] | None = None,
 ) -> AskPortfolioResponse:
-
     question = (question or "").strip()
 
     if not question:
-        return fallback_ask_portfolio_response(question="")
+        return AskPortfolioResponse(
+            answer="Please ask a question about the portfolio.",
+            why=[
+                "The request was empty, so there was nothing specific to analyze."
+            ],
+            source="fallback",
+            prompt_version=PROMPT_VERSION,
+        )
 
     try:
         prompt = build_ask_portfolio_prompt(
@@ -32,34 +38,24 @@ def ask_portfolio_question(
         )
 
         client = LLMClient()
-
         raw = client.generate_json(prompt)
 
         validated = validate_ask_portfolio_response(raw)
-
-        # enforce version
         validated.prompt_version = validated.prompt_version or PROMPT_VERSION
 
         return validated
 
-    except (LLMClientError, ValueError) as e:
-        # safe fallback for ANY LLM issue
-        return fallback_ask_portfolio_response(question=question)
+    except (LLMClientError, ValueError):
+        fallback = fallback_ask_portfolio_response(question=question)
+        fallback.prompt_version = fallback.prompt_version or PROMPT_VERSION
+        return fallback
 
-    except Exception as e:
-        # absolute fallback — never break API
+    except Exception:
         return AskPortfolioResponse(
             answer="Something went wrong while generating the AI response.",
-            reasoning_summary=[
-                "The system encountered an unexpected error."
-            ],
-            watch_for=[
-                "Retry the question in a moment.",
-                "If the issue persists, check backend logs.",
-            ],
-            follow_up_suggestions=[
-                "What is the main risk?",
-                "Explain the allocation",
+            why=[
+                "The system encountered an unexpected error.",
+                "Try asking again in a moment.",
             ],
             source="fallback",
             prompt_version=PROMPT_VERSION,

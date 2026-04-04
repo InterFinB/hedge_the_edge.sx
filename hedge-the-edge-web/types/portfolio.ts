@@ -193,9 +193,7 @@ export type AskPortfolioRequest = {
 
 export type AskPortfolioResponse = {
   answer: string;
-  reasoning_summary: string[];
-  watch_for: string[];
-  follow_up_suggestions: string[];
+  why?: string[];
   source?: string | null;
   prompt_version?: string | null;
 };

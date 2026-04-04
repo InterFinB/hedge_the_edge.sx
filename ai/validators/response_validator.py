@@ -19,11 +19,11 @@ def validate_ask_portfolio_response(payload: object) -> AskPortfolioResponse:
     if not isinstance(answer, str) or not answer.strip():
         raise ValueError("AI response is missing a valid 'answer' field.")
 
+    why = _clean_string_list(payload.get("why"))
+
     return AskPortfolioResponse(
         answer=answer.strip(),
-        reasoning_summary=_clean_string_list(payload.get("reasoning_summary")),
-        watch_for=_clean_string_list(payload.get("watch_for")),
-        follow_up_suggestions=_clean_string_list(payload.get("follow_up_suggestions")),
+        why=why,
         source="llm",
         prompt_version=payload.get("prompt_version")
         if isinstance(payload.get("prompt_version"), str)
@@ -37,18 +37,11 @@ def fallback_ask_portfolio_response(question: str) -> AskPortfolioResponse:
             "I could not generate a reliable portfolio-specific answer for that question "
             "from the available context."
         ),
-        reasoning_summary=[
+        why=[
             "The AI response was unavailable or invalid.",
             "The portfolio data itself is still intact.",
-        ],
-        watch_for=[
-            "Try asking about one aspect at a time, such as concentration, downside risk, or top holdings."
-        ],
-        follow_up_suggestions=[
-            "Why is the largest position so large?",
-            "What does the simulation downside mean here?",
-            "Is this portfolio concentrated or diversified?",
+            "Try narrowing the question to one issue like concentration, downside risk, or top holdings.",
         ],
         source="fallback",
-        prompt_version="step1_v1",
+        prompt_version="step1_v2",
     )

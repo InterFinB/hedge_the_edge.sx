@@ -17,7 +17,7 @@ type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
-  suggestions?: string[];
+  why?: string[];
 };
 
 function buildConversation(
@@ -34,7 +34,7 @@ function makeAssistantMessage(response: AskPortfolioResponse): ChatMessage {
     id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role: "assistant",
     content: response.answer,
-    suggestions: response.follow_up_suggestions ?? [],
+    why: response.why ?? [],
   };
 }
 
@@ -85,7 +85,7 @@ export default function PortfolioAskBar({
       "What is the main risk in this portfolio?",
       "Why are the top positions weighted this way?",
       "How should I interpret the simulation results?",
-      "What should I watch before rebalancing?",
+      "What matters most before rebalancing?",
     ],
     []
   );
@@ -240,22 +240,22 @@ export default function PortfolioAskBar({
                         ))}
                       </div>
 
-                      {message.suggestions && message.suggestions.length > 0 ? (
-                        <div className="pt-1">
-                          <div className="flex flex-wrap gap-2">
-                            {message.suggestions.map((item, index) => (
-                              <button
-                                key={`${item}-${index}`}
-                                type="button"
-                                onClick={() => void submitQuestion(item)}
-                                disabled={loading || disabled}
-                                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 transition hover:border-slate-300 hover:text-slate-800 disabled:opacity-60"
+                      {message.why && message.why.length > 0 ? (
+                        <details className="pt-1">
+                          <summary className="cursor-pointer text-xs font-medium text-slate-500 transition hover:text-slate-700">
+                            Why?
+                          </summary>
+                          <div className="mt-3 space-y-2">
+                            {message.why.map((item, index) => (
+                              <div
+                                key={index}
+                                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-6 text-slate-600"
                               >
                                 {item}
-                              </button>
+                              </div>
                             ))}
                           </div>
-                        </div>
+                        </details>
                       ) : null}
                     </div>
                   ) : (
