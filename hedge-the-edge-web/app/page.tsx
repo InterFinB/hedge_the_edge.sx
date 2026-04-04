@@ -261,7 +261,6 @@ export default function Home() {
 
               <PortfolioAskBar
                 aiContext={result.ai_context ?? null}
-                explanation={result.explanation}
                 disabled={loading}
               />
             </div>

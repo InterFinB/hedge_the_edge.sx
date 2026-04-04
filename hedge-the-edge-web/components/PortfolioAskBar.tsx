@@ -5,13 +5,11 @@ import { askPortfolio } from "@/services/api";
 import type {
   AIContext,
   AskPortfolioResponse,
-  ExplanationBlock,
   PortfolioConversationMessage,
 } from "@/types/portfolio";
 
 type PortfolioAskBarProps = {
   aiContext?: AIContext | null;
-  explanation?: ExplanationBlock | null;
   disabled?: boolean;
 };
 
@@ -19,34 +17,8 @@ type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
-  meta?: {
-    reasoning_summary?: string[];
-    watch_for?: string[];
-    follow_up_suggestions?: string[];
-  };
+  suggestions?: string[];
 };
-
-function normalizeExplanationSummary(
-  explanation?: ExplanationBlock | null
-): string {
-  if (!explanation) return "";
-
-  if (typeof explanation === "string") {
-    return explanation;
-  }
-
-  const summary = explanation.portfolio_summary;
-
-  if (Array.isArray(summary)) {
-    return summary.join(" ");
-  }
-
-  if (typeof summary === "string") {
-    return summary;
-  }
-
-  return "";
-}
 
 function buildConversation(
   messages: ChatMessage[]
@@ -62,11 +34,7 @@ function makeAssistantMessage(response: AskPortfolioResponse): ChatMessage {
     id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role: "assistant",
     content: response.answer,
-    meta: {
-      reasoning_summary: response.reasoning_summary ?? [],
-      watch_for: response.watch_for ?? [],
-      follow_up_suggestions: response.follow_up_suggestions ?? [],
-    },
+    suggestions: response.follow_up_suggestions ?? [],
   };
 }
 
@@ -93,9 +61,15 @@ function getReadableAskError(error: unknown): string {
   return raw;
 }
 
+function splitIntoParagraphs(text: string): string[] {
+  return text
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 export default function PortfolioAskBar({
   aiContext,
-  explanation,
   disabled = false,
 }: PortfolioAskBarProps) {
   const [question, setQuestion] = useState("");
@@ -114,11 +88,6 @@ export default function PortfolioAskBar({
       "What should I watch before rebalancing?",
     ],
     []
-  );
-
-  const explanationSummary = useMemo(
-    () => normalizeExplanationSummary(explanation),
-    [explanation]
   );
 
   const submitQuestion = async (rawQuestion?: string) => {
@@ -158,7 +127,7 @@ export default function PortfolioAskBar({
   };
 
   return (
-    <section className="rounded-[24px] border border-blue-200 bg-blue-50/80 px-5 py-4 shadow-[0_10px_25px_rgba(15,23,42,0.04)]">
+    <section className="rounded-[24px] border border-slate-200 bg-white/85 px-5 py-4 shadow-[0_10px_25px_rgba(15,23,42,0.04)] backdrop-blur">
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
@@ -166,17 +135,17 @@ export default function PortfolioAskBar({
       >
         <div>
           <div className="font-semibold text-slate-900">Ask Hedge The Edge</div>
-          <p className="mt-1 text-sm text-slate-700">
+          <p className="mt-1 text-sm text-slate-600">
             Ask follow-up questions about allocation, risk, simulation, and what to
             monitor next.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
+          <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
             {hasContext ? "Connected to portfolio" : "AI context unavailable"}
           </div>
-          <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+          <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
             {isOpen ? "Hide" : "Show"}
           </div>
         </div>
@@ -191,14 +160,7 @@ export default function PortfolioAskBar({
             </div>
           )}
 
-          {explanationSummary && (
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-700">
-              <span className="font-semibold text-slate-900">Current context:</span>{" "}
-              {explanationSummary}
-            </div>
-          )}
-
-          <div className="mt-4 flex gap-2">
+          <div className="flex gap-2">
             <input
               type="text"
               value={question}
@@ -223,23 +185,18 @@ export default function PortfolioAskBar({
           </div>
 
           {!messages.length && hasContext && (
-            <div className="mt-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Try one of these
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {starterSuggestions.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    onClick={() => void submitQuestion(suggestion)}
-                    disabled={loading || disabled}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:opacity-60"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {starterSuggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => void submitQuestion(suggestion)}
+                  disabled={loading || disabled}
+                  className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-slate-900 disabled:opacity-60"
+                >
+                  {suggestion}
+                </button>
+              ))}
             </div>
           )}
 
@@ -255,64 +212,44 @@ export default function PortfolioAskBar({
                 <div
                   key={message.id}
                   className={[
-                    "rounded-2xl border px-4 py-4",
+                    "rounded-[22px] px-4 py-4",
                     message.role === "user"
-                      ? "border-slate-200 bg-white"
-                      : "border-blue-200 bg-white/90",
+                      ? "ml-auto max-w-[85%] border border-slate-200 bg-slate-900 text-white"
+                      : "max-w-[92%] border border-slate-200 bg-slate-50/80 text-slate-900",
                   ].join(" ")}
                 >
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    {message.role === "user" ? "You" : "Hedge The Edge AI"}
-                  </div>
+                  {message.role === "assistant" ? (
+                    <div className="space-y-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                        Hedge The Edge AI
+                      </div>
 
-                  <div className="text-sm leading-7 text-slate-800">
-                    {message.content}
-                  </div>
+                      <div className="space-y-3">
+                        {splitIntoParagraphs(message.content).map((paragraph, index) => (
+                          <p
+                            key={index}
+                            className={[
+                              "leading-7 text-slate-800",
+                              index === 0
+                                ? "text-[15px] font-medium text-slate-950"
+                                : "text-sm",
+                            ].join(" ")}
+                          >
+                            {paragraph}
+                          </p>
+                        ))}
+                      </div>
 
-                  {message.role === "assistant" && message.meta && (
-                    <div className="mt-4 space-y-3">
-                      {message.meta.reasoning_summary?.length ? (
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                            Reasoning summary
-                          </div>
-                          <div className="space-y-2">
-                            {message.meta.reasoning_summary.map((item, index) => (
-                              <div key={index} className="text-sm text-slate-700">
-                                {item}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {message.meta.watch_for?.length ? (
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">
-                            Watch for
-                          </div>
-                          <div className="space-y-2">
-                            {message.meta.watch_for.map((item, index) => (
-                              <div key={index} className="text-sm text-slate-700">
-                                {item}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {message.meta.follow_up_suggestions?.length ? (
-                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
-                            Follow-up ideas
-                          </div>
+                      {message.suggestions && message.suggestions.length > 0 ? (
+                        <div className="pt-1">
                           <div className="flex flex-wrap gap-2">
-                            {message.meta.follow_up_suggestions.map((item, index) => (
+                            {message.suggestions.map((item, index) => (
                               <button
                                 key={`${item}-${index}`}
                                 type="button"
                                 onClick={() => void submitQuestion(item)}
-                                className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-emerald-300 hover:text-slate-950"
+                                disabled={loading || disabled}
+                                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 transition hover:border-slate-300 hover:text-slate-800 disabled:opacity-60"
                               >
                                 {item}
                               </button>
@@ -321,9 +258,29 @@ export default function PortfolioAskBar({
                         </div>
                       ) : null}
                     </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                        You
+                      </div>
+                      <p className="text-sm leading-7 text-white">{message.content}</p>
+                    </div>
                   )}
                 </div>
               ))}
+
+              {loading && (
+                <div className="max-w-[92%] rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 text-slate-900">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Hedge The Edge AI
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-slate-400" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-slate-400 [animation-delay:150ms]" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-slate-400 [animation-delay:300ms]" />
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
