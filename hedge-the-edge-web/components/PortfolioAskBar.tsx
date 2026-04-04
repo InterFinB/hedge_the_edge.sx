@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { askPortfolio } from "@/services/api";
 import type {
   AIContext,
@@ -90,6 +90,8 @@ export default function PortfolioAskBar({
   const [pendingSelectionContext, setPendingSelectionContext] =
     useState<SelectionContext | null>(null);
 
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
   const hasContext = !!aiContext;
 
   const starterSuggestions = useMemo(
@@ -164,16 +166,13 @@ export default function PortfolioAskBar({
     setIsOpen(true);
     setError("");
     setPendingSelectionContext(externalAsk.selectionContext ?? null);
+    setQuestion(externalAsk.question);
 
-    if (externalAsk.autoSubmit) {
-      void submitQuestion(
-        externalAsk.question,
-        externalAsk.selectionContext ?? null
-      );
-    } else {
-      setQuestion(externalAsk.question);
-    }
-  }, [externalAsk?.nonce, externalAsk, submitQuestion]);
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
+  }, [externalAsk?.nonce, externalAsk]);
 
   return (
     <section className="rounded-[24px] border border-slate-200 bg-white/85 px-5 py-4 shadow-[0_10px_25px_rgba(15,23,42,0.04)] backdrop-blur">
@@ -209,9 +208,30 @@ export default function PortfolioAskBar({
             </div>
           )}
 
+          {pendingSelectionContext?.selected_text ? (
+            <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Reference text
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPendingSelectionContext(null)}
+                  className="text-xs font-medium text-slate-400 transition hover:text-slate-700"
+                >
+                  Clear
+                </button>
+              </div>
+              <p className="line-clamp-4 leading-6 text-slate-700">
+                “{pendingSelectionContext.selected_text}”
+              </p>
+            </div>
+          ) : null}
+
           <div className="flex gap-2">
             <input
               id="portfolio-ask-input"
+              ref={inputRef}
               type="text"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}

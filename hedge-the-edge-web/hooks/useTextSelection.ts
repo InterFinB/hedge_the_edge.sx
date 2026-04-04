@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SelectionContext } from "@/types/portfolio";
 
 export type TextSelectionPayload = {
@@ -15,7 +15,7 @@ function isIgnoredTarget(element: HTMLElement | null) {
 
   return Boolean(
     element.closest(
-      'input, textarea, button, a, [contenteditable="true"], [data-no-selection-ask="true"]'
+      'input, textarea, button, a, summary, [contenteditable="true"], [data-no-selection-ask="true"]'
     )
   );
 }
@@ -46,6 +46,7 @@ function getSelectionLabel(element: HTMLElement | null): string | null {
 
 export function useTextSelection() {
   const [selection, setSelection] = useState<TextSelectionPayload | null>(null);
+  const lastSelectionKeyRef = useRef<string>("");
 
   useEffect(() => {
     const updateSelection = () => {
@@ -53,6 +54,7 @@ export function useTextSelection() {
 
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
         setSelection(null);
+        lastSelectionKeyRef.current = "";
         return;
       }
 
@@ -60,6 +62,7 @@ export function useTextSelection() {
 
       if (!text || text.length < 8) {
         setSelection(null);
+        lastSelectionKeyRef.current = "";
         return;
       }
 
@@ -68,6 +71,7 @@ export function useTextSelection() {
 
       if (!rect || (!rect.width && !rect.height)) {
         setSelection(null);
+        lastSelectionKeyRef.current = "";
         return;
       }
 
@@ -79,10 +83,11 @@ export function useTextSelection() {
 
       if (isIgnoredTarget(element)) {
         setSelection(null);
+        lastSelectionKeyRef.current = "";
         return;
       }
 
-      setSelection({
+      const nextSelection: TextSelectionPayload = {
         text,
         x: rect.left + rect.width / 2,
         y: rect.top + window.scrollY - 10,
@@ -92,11 +97,25 @@ export function useTextSelection() {
           selected_text: text,
           surrounding_label: getSelectionLabel(element),
         },
+      };
+
+      const selectionKey = JSON.stringify({
+        text: nextSelection.text,
+        section: nextSelection.selectionContext.section,
+        label: nextSelection.selectionContext.surrounding_label,
       });
+
+      if (selectionKey === lastSelectionKeyRef.current) {
+        return;
+      }
+
+      lastSelectionKeyRef.current = selectionKey;
+      setSelection(nextSelection);
     };
 
     const clearSelection = () => {
       setSelection(null);
+      lastSelectionKeyRef.current = "";
     };
 
     const deferredUpdate = () => {
@@ -114,5 +133,5 @@ export function useTextSelection() {
     };
   }, []);
 
-  return selection;
+  return { selection, clearSelection: () => setSelection(null) };
 }

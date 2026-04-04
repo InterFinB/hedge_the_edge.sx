@@ -19,7 +19,10 @@ import {
 
 import PortfolioAskBar from "@/components/PortfolioAskBar";
 import SelectionAskBubble from "@/components/SelectionAskBubble";
-import { useTextSelection, type TextSelectionPayload } from "@/hooks/useTextSelection";
+import {
+  useTextSelection,
+  type TextSelectionPayload,
+} from "@/hooks/useTextSelection";
 import { generatePortfolio } from "@/services/api";
 import type { PortfolioResponse, SelectionContext } from "@/types/portfolio";
 
@@ -104,7 +107,7 @@ export default function Home() {
     autoSubmit: boolean;
   } | null>(null);
 
-  const selection = useTextSelection();
+  const { selection, clearSelection } = useTextSelection();
 
   const generate = async () => {
     setLoading(true);
@@ -143,13 +146,14 @@ export default function Home() {
   };
 
   const handleSelectionAsk = (payload: TextSelectionPayload) => {
+    clearSelection();
     window.getSelection()?.removeAllRanges();
 
     setExternalAsk({
       nonce: Date.now(),
       question: "Can you explain this part in simpler terms?",
       selectionContext: payload.selectionContext,
-      autoSubmit: true,
+      autoSubmit: false,
     });
   };
 
