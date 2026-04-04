@@ -781,7 +781,18 @@ export function SimulationDistributionChart({
               domain={[0, Math.max(5, Math.ceil(maxCount * 1.1))]}
             />
             <Tooltip
-              formatter={(value) => [`${value}`, "Simulations"]}
+              formatter={(value) => {
+                const numericValue =
+                  typeof value === "number"
+                    ? value
+                    : typeof value === "string"
+                    ? Number(value)
+                    : NaN;
+
+                return Number.isFinite(numericValue)
+                  ? `${numericValue.toFixed(0)} simulations`
+                  : "N/A";  
+              }}
               labelFormatter={(label) => `Return bucket: ${label}`}
             />
             <Bar dataKey="simulationCount" radius={[8, 8, 0, 0]} />
