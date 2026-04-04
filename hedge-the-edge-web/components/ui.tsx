@@ -753,11 +753,20 @@ export function SimulationDistributionChart({
 
   if (data.length === 0) return null;
 
+  const maxCount = Math.max(...data.map((item) => item.y), 0);
+
   return (
-    <Box title="Simulation distribution" askSection="simulation" askLabel="Simulation distribution">
-      <div className="h-[210px] w-full">
+    <Box
+      title="Simulation distribution"
+      askSection="simulation"
+      askLabel="Simulation distribution"
+      rightSlot={
+        <span className="text-xs text-slate-400">simulation count by return bucket</span>
+      }
+    >
+      <div className="h-[230px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
+          <BarChart
             data={data}
             margin={{ top: 6, right: 8, left: 0, bottom: 0 }}
           >
@@ -772,20 +781,32 @@ export function SimulationDistributionChart({
               tickLine={false}
               axisLine={false}
             />
-            <YAxis fontSize={11} tickLine={false} axisLine={false} />
+            <YAxis
+              fontSize={11}
+              tickLine={false}
+              axisLine={false}
+              domain={[0, Math.max(5, Math.ceil(maxCount * 1.1))]}
+            />
             <Tooltip
-              formatter={(value) => compactTooltipFormatter(value, "", 0)}
+              formatter={(value) => {
+                const numericValue =
+                  typeof value === "number"
+                    ? value
+                    : typeof value === "string"
+                    ? Number(value)
+                    : NaN;
+
+                return Number.isFinite(numericValue)
+                  ? [
+                      `${numericValue.toFixed(0)}`,
+                      "Simulations",
+                    ]
+                  : ["N/A", "Simulations"];
+              }}
               labelFormatter={(label) => `Return bucket: ${label}`}
             />
-            <Area
-              type="monotone"
-              dataKey="y"
-              stroke="#0f766e"
-              fill="#99f6e4"
-              fillOpacity={0.8}
-              strokeWidth={2}
-            />
-          </AreaChart>
+            <Bar dataKey="y" radius={[8, 8, 0, 0]} />
+          </BarChart>
         </ResponsiveContainer>
       </div>
     </Box>
