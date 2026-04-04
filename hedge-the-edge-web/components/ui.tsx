@@ -12,8 +12,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  AreaChart,
-  Area,
 } from "recharts";
 import type {
   CategoryExposureDatum,
@@ -28,11 +26,6 @@ import type {
 function pct(x?: number | null, digits = 2) {
   if (x === undefined || x === null || Number.isNaN(x)) return "—";
   return `${(x * 100).toFixed(digits)}%`;
-}
-
-function num(x?: number | null, digits = 2) {
-  if (x === undefined || x === null || Number.isNaN(x)) return "—";
-  return x.toFixed(digits);
 }
 
 function tickerName(t: string, tickerToName?: Record<string, string>) {
@@ -703,23 +696,21 @@ function normalizeSimulationChart(input: unknown) {
   if (Array.isArray(input)) {
     return input
       .map((item: any) => {
-        const rawX =
+        const rawBucket =
           item.bin ?? item.x ?? item.return ?? item.center ?? item.label ?? "";
-        const rawY = item.count ?? item.frequency ?? item.y ?? item.value ?? 0;
+        const rawCount = item.count ?? item.frequency ?? item.y ?? item.value ?? 0;
 
-        const xNumeric = typeof rawX === "number" ? rawX * 100 : Number(rawX);
-        const xLabel =
-          typeof rawX === "number"
-            ? `${(rawX * 100).toFixed(1)}%`
-            : String(rawX);
+        const bucketLabel =
+          typeof rawBucket === "number"
+            ? `${(rawBucket * 100).toFixed(1)}%`
+            : String(rawBucket);
 
         return {
-          x: xLabel,
-          xNumeric: Number.isFinite(xNumeric) ? xNumeric : null,
-          y: Number(rawY),
+          bucketLabel,
+          simulationCount: Number(rawCount),
         };
       })
-      .filter((d) => !Number.isNaN(d.y));
+      .filter((d) => !Number.isNaN(d.simulationCount));
   }
 
   if (
@@ -732,9 +723,9 @@ function normalizeSimulationChart(input: unknown) {
     const counts = (input as any).counts as number[];
 
     return bins.map((bin, idx) => ({
-      x: typeof bin === "number" ? `${(bin * 100).toFixed(1)}%` : String(bin),
-      xNumeric: typeof bin === "number" ? bin * 100 : Number(bin),
-      y: Number(counts[idx] ?? 0),
+      bucketLabel:
+        typeof bin === "number" ? `${(bin * 100).toFixed(1)}%` : String(bin),
+      simulationCount: Number(counts[idx] ?? 0),
     }));
   }
 
@@ -753,7 +744,7 @@ export function SimulationDistributionChart({
 
   if (data.length === 0) return null;
 
-  const maxCount = Math.max(...data.map((item) => item.y), 0);
+  const maxCount = Math.max(...data.map((item) => item.simulationCount), 0);
 
   return (
     <Box
@@ -761,7 +752,9 @@ export function SimulationDistributionChart({
       askSection="simulation"
       askLabel="Simulation distribution"
       rightSlot={
-        <span className="text-xs text-slate-400">simulation count by return bucket</span>
+        <span className="text-xs text-slate-400">
+          simulation count by return bucket
+        </span>
       }
     >
       <div className="h-[230px] w-full">
@@ -776,7 +769,7 @@ export function SimulationDistributionChart({
               vertical={false}
             />
             <XAxis
-              dataKey="x"
+              dataKey="bucketLabel"
               fontSize={11}
               tickLine={false}
               axisLine={false}
@@ -788,24 +781,10 @@ export function SimulationDistributionChart({
               domain={[0, Math.max(5, Math.ceil(maxCount * 1.1))]}
             />
             <Tooltip
-              formatter={(value) => {
-                const numericValue =
-                  typeof value === "number"
-                    ? value
-                    : typeof value === "string"
-                    ? Number(value)
-                    : NaN;
-
-                return Number.isFinite(numericValue)
-                  ? [
-                      `${numericValue.toFixed(0)}`,
-                      "Simulations",
-                    ]
-                  : ["N/A", "Simulations"];
-              }}
+              formatter={(value) => [`${value}`, "Simulations"]}
               labelFormatter={(label) => `Return bucket: ${label}`}
             />
-            <Bar dataKey="y" radius={[8, 8, 0, 0]} />
+            <Bar dataKey="simulationCount" radius={[8, 8, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
