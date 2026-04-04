@@ -4,7 +4,7 @@ import json
 
 from ai.prompts.system_prompt import SYSTEM_PROMPT
 
-PROMPT_VERSION = "step2_v2"
+PROMPT_VERSION = "step2_v3"
 
 
 def build_ask_portfolio_prompt(
@@ -38,6 +38,13 @@ Style:
 - calm, confident tone
 - no unnecessary complexity
 - no generic filler phrases
+
+Selection-context guidance:
+- if ai_context.selection_context.selected_text is present, treat that selected text as the focal point
+- explain that selected text first before zooming out to the broader portfolio
+- if the selected text is ambiguous, use the surrounding portfolio context to interpret it carefully
+- if ai_context.selection_context.section is present, keep the answer anchored to that part of the portfolio
+- do not ignore the user’s direct question, but use selection_context to sharpen the answer
 
 Follow-up guidance:
 - suggest 2–3 natural next questions

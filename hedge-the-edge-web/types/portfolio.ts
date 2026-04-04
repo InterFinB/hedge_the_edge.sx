@@ -142,6 +142,20 @@ export type MarketDataStatus = {
   tickers?: string[];
 };
 
+export type SelectionContext = {
+  source_type?: "text_selection" | "section";
+  section?:
+    | "explanation"
+    | "chat_response"
+    | "simulation"
+    | "risk"
+    | "weights"
+    | "allocation"
+    | "unknown";
+  selected_text?: string;
+  surrounding_label?: string | null;
+};
+
 export type AIContext = {
   portfolio_objective: {
     target_return: number;
@@ -177,7 +191,7 @@ export type AIContext = {
   universe_status: UniverseStatus;
   market_data: Record<string, unknown>;
   explanation?: ExplanationBlock | null;
-  selection_context?: null;
+  selection_context?: SelectionContext | null;
 };
 
 export type PortfolioConversationMessage = {

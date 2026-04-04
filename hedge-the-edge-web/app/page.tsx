@@ -18,8 +18,10 @@ import {
 } from "@/components/ui";
 
 import PortfolioAskBar from "@/components/PortfolioAskBar";
+import SelectionAskBubble from "@/components/SelectionAskBubble";
+import { useTextSelection, type TextSelectionPayload } from "@/hooks/useTextSelection";
 import { generatePortfolio } from "@/services/api";
-import type { PortfolioResponse } from "@/types/portfolio";
+import type { PortfolioResponse, SelectionContext } from "@/types/portfolio";
 
 function parsePercentInput(input: string): number | null {
   const trimmed = input.trim();
@@ -95,11 +97,21 @@ export default function Home() {
   const [warning, setWarning] = useState("");
   const [result, setResult] = useState<PortfolioResponse | null>(null);
 
+  const [externalAsk, setExternalAsk] = useState<{
+    nonce: number;
+    question: string;
+    selectionContext: SelectionContext | null;
+    autoSubmit: boolean;
+  } | null>(null);
+
+  const selection = useTextSelection();
+
   const generate = async () => {
     setLoading(true);
     setError("");
     setWarning("");
     setResult(null);
+    setExternalAsk(null);
 
     try {
       const targetReturn = parsePercentInput(targetReturnInput);
@@ -130,6 +142,17 @@ export default function Home() {
     }
   };
 
+  const handleSelectionAsk = (payload: TextSelectionPayload) => {
+    window.getSelection()?.removeAllRanges();
+
+    setExternalAsk({
+      nonce: Date.now(),
+      question: "Can you explain this part in simpler terms?",
+      selectionContext: payload.selectionContext,
+      autoSubmit: true,
+    });
+  };
+
   const riskContributionEntries = useMemo(() => {
     if (!result) return [];
 
@@ -142,7 +165,7 @@ export default function Home() {
   const marketData = result?.market_data;
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#f8fafc_0%,#eef2f7_45%,#e5ebf3_100%)] text-slate-900">
+    <main className="relative min-h-screen bg-[radial-gradient(circle_at_top,#f8fafc_0%,#eef2f7_45%,#e5ebf3_100%)] text-slate-900">
       <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
         <header className="mb-6">
           <div className="rounded-[28px] border border-white/70 bg-white/80 px-6 py-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] backdrop-blur">
@@ -262,11 +285,16 @@ export default function Home() {
               <PortfolioAskBar
                 aiContext={result.ai_context ?? null}
                 disabled={loading}
+                externalAsk={externalAsk}
               />
             </div>
           )}
         </div>
       </div>
+
+      {result && (
+        <SelectionAskBubble selection={selection} onAsk={handleSelectionAsk} />
+      )}
     </main>
   );
 }

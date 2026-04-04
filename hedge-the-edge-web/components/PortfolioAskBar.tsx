@@ -1,16 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { askPortfolio } from "@/services/api";
 import type {
   AIContext,
   AskPortfolioResponse,
   PortfolioConversationMessage,
+  SelectionContext,
 } from "@/types/portfolio";
 
 type PortfolioAskBarProps = {
   aiContext?: AIContext | null;
   disabled?: boolean;
+  externalAsk?: {
+    nonce: number;
+    question: string;
+    selectionContext: SelectionContext | null;
+    autoSubmit: boolean;
+  } | null;
 };
 
 type ChatMessage = {
@@ -73,12 +80,15 @@ function splitIntoParagraphs(text: string): string[] {
 export default function PortfolioAskBar({
   aiContext,
   disabled = false,
+  externalAsk = null,
 }: PortfolioAskBarProps) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isOpen, setIsOpen] = useState(true);
+  const [pendingSelectionContext, setPendingSelectionContext] =
+    useState<SelectionContext | null>(null);
 
   const hasContext = !!aiContext;
 
@@ -92,41 +102,78 @@ export default function PortfolioAskBar({
     []
   );
 
-  const submitQuestion = async (rawQuestion?: string) => {
-    const trimmed = (rawQuestion ?? question).trim();
+  const submitQuestion = useCallback(
+    async (
+      rawQuestion?: string,
+      selectionOverride?: SelectionContext | null
+    ) => {
+      const trimmed = (rawQuestion ?? question).trim();
 
-    if (!trimmed || loading || disabled || !aiContext) {
-      return;
-    }
+      if (!trimmed || loading || disabled || !aiContext) {
+        return;
+      }
 
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      role: "user",
-      content: trimmed,
-    };
+      const activeSelectionContext =
+        selectionOverride ?? pendingSelectionContext ?? null;
 
-    const nextMessages = [...messages, userMessage];
+      const userMessage: ChatMessage = {
+        id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        role: "user",
+        content: trimmed,
+      };
 
-    setMessages(nextMessages);
-    setQuestion("");
-    setError("");
-    setLoading(true);
+      const nextMessages = [...messages, userMessage];
+
+      setMessages(nextMessages);
+      setQuestion("");
+      setError("");
+      setLoading(true);
+      setIsOpen(true);
+
+      try {
+        const response = await askPortfolio({
+          question: trimmed,
+          ai_context: {
+            ...aiContext,
+            selection_context: activeSelectionContext,
+          },
+          conversation: buildConversation(nextMessages),
+        });
+
+        setMessages([...nextMessages, makeAssistantMessage(response)]);
+        setPendingSelectionContext(null);
+      } catch (err) {
+        setError(getReadableAskError(err));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      aiContext,
+      disabled,
+      loading,
+      messages,
+      pendingSelectionContext,
+      question,
+    ]
+  );
+
+  useEffect(() => {
+    if (!externalAsk) return;
+
     setIsOpen(true);
+    setError("");
+    setPendingSelectionContext(externalAsk.selectionContext ?? null);
 
-    try {
-      const response = await askPortfolio({
-        question: trimmed,
-        ai_context: aiContext,
-        conversation: buildConversation(nextMessages),
-      });
-
-      setMessages([...nextMessages, makeAssistantMessage(response)]);
-    } catch (err) {
-      setError(getReadableAskError(err));
-    } finally {
-      setLoading(false);
+    if (externalAsk.autoSubmit) {
+      void submitQuestion(
+        externalAsk.question,
+        externalAsk.selectionContext ?? null
+      );
+    } else {
+      setQuestion(externalAsk.question);
     }
-  };
+  }, [externalAsk?.nonce, externalAsk, submitQuestion]);
 
   return (
     <section className="rounded-[24px] border border-slate-200 bg-white/85 px-5 py-4 shadow-[0_10px_25px_rgba(15,23,42,0.04)] backdrop-blur">
@@ -164,6 +211,7 @@ export default function PortfolioAskBar({
 
           <div className="flex gap-2">
             <input
+              id="portfolio-ask-input"
               type="text"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
@@ -219,6 +267,12 @@ export default function PortfolioAskBar({
                       ? "ml-auto max-w-[85%] border border-slate-200 bg-slate-900 text-white"
                       : "max-w-[92%] border border-slate-200 bg-slate-50/80 text-slate-900",
                   ].join(" ")}
+                  data-ask-section={
+                    message.role === "assistant" ? "chat_response" : undefined
+                  }
+                  data-ask-label={
+                    message.role === "assistant" ? "AI response" : undefined
+                  }
                 >
                   {message.role === "assistant" ? (
                     <div className="space-y-4">
@@ -268,7 +322,7 @@ export default function PortfolioAskBar({
                               type="button"
                               onClick={() => void submitQuestion(q)}
                               disabled={loading || disabled}
-                              className="text-left text-xs text-slate-400 transition hover:text-slate-700 disabled:opacity-60"
+                              className="text-left text-xs italic text-slate-400 transition hover:text-slate-700 disabled:opacity-60"
                             >
                               {q}
                             </button>

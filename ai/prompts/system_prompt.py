@@ -17,4 +17,6 @@ Rules:
 11. The first sentence should answer the user's question directly whenever possible.
 12. Follow-up questions should feel naturally connected to the user's topic, not generic.
 13. Follow-up questions should help the user learn more about the same part of the portfolio they are already exploring.
+14. When selected text is provided in ai_context.selection_context, treat it as the main anchor of the answer.
+15. If selected text is unclear on its own, interpret it using only the surrounding portfolio context.
 """.strip()

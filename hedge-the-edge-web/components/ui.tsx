@@ -49,13 +49,28 @@ function Box({
   title,
   children,
   rightSlot,
+  askSection,
+  askLabel,
 }: {
   title: string;
   children: React.ReactNode;
   rightSlot?: React.ReactNode;
+  askSection?:
+    | "allocation"
+    | "risk"
+    | "simulation"
+    | "weights"
+    | "explanation"
+    | "chat_response"
+    | "unknown";
+  askLabel?: string;
 }) {
   return (
-    <section className="rounded-[26px] border border-white/70 bg-white/88 p-4 shadow-[0_8px_28px_rgba(15,23,42,0.06)] backdrop-blur">
+    <section
+      className="rounded-[26px] border border-white/70 bg-white/88 p-4 shadow-[0_8px_28px_rgba(15,23,42,0.06)] backdrop-blur"
+      data-ask-section={askSection}
+      data-ask-label={askLabel}
+    >
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
           {title}
@@ -431,6 +446,8 @@ export function AllocationChart({
   return (
     <Box
       title="Allocation"
+      askSection="allocation"
+      askLabel="Allocation"
       rightSlot={
         <span className="text-xs text-slate-400">{rows.length} positions</span>
       }
@@ -466,6 +483,8 @@ export function AllocationChart({
           {rows.map(([ticker, weight], i) => (
             <div
               key={ticker}
+              data-ask-section="allocation"
+              data-ask-label="Allocation holding"
               className="grid grid-cols-[28px_minmax(0,1fr)_72px] items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-2.5"
             >
               <span className="text-xs font-medium text-slate-500">
@@ -529,6 +548,8 @@ export function CategoryExposureChart({
   return (
     <Box
       title="Category exposure"
+      askSection="allocation"
+      askLabel="Category exposure"
       rightSlot={
         <span className="text-xs text-slate-400">{data.length} categories</span>
       }
@@ -574,6 +595,8 @@ export function CategoryExposureChart({
           {data.map((item, index) => (
             <div
               key={item.name}
+              data-ask-section="allocation"
+              data-ask-label="Category exposure"
               className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2"
             >
               <div className="flex min-w-0 items-center gap-2">
@@ -629,6 +652,8 @@ export function RiskContributionChart({
   return (
     <Box
       title="Risk contribution"
+      askSection="risk"
+      askLabel="Risk contribution"
       rightSlot={
         <span className="text-xs text-slate-400">% of total contribution</span>
       }
@@ -729,7 +754,7 @@ export function SimulationDistributionChart({
   if (data.length === 0) return null;
 
   return (
-    <Box title="Simulation distribution">
+    <Box title="Simulation distribution" askSection="simulation" askLabel="Simulation distribution">
       <div className="h-[210px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
@@ -787,11 +812,13 @@ export function SimulationSummary({ result }: { result: PortfolioResponse }) {
   ];
 
   return (
-    <Box title="Simulation summary">
+    <Box title="Simulation summary" askSection="simulation" askLabel="Simulation summary">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {cards.map((item) => (
           <div
             key={item.label}
+            data-ask-section="simulation"
+            data-ask-label="Simulation summary"
             className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#f8fafc_0%,#f1f5f9_100%)] px-4 py-4"
           >
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
@@ -827,6 +854,8 @@ export function WeightsTable({
   return (
     <Box
       title="Weights"
+      askSection="weights"
+      askLabel="Weights"
       rightSlot={
         <span className="text-xs text-slate-400">ranked meaningful positions</span>
       }
@@ -844,6 +873,8 @@ export function WeightsTable({
           {rows.map(([ticker, weight], index) => (
             <div
               key={ticker}
+              data-ask-section="weights"
+              data-ask-label="Weight row"
               className={[
                 "grid grid-cols-[44px_92px_minmax(0,1.2fr)_minmax(0,0.9fr)_96px] items-center px-4 py-3 text-sm",
                 index < 5 ? "bg-slate-50/40" : "",
@@ -1113,7 +1144,11 @@ export function ExplanationSection({
   };
 
   return (
-    <section className="space-y-4">
+    <section
+      className="space-y-4"
+      data-ask-section="explanation"
+      data-ask-label="Explanation"
+    >
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -1165,6 +1200,8 @@ export function ExplanationSection({
                   {chips.map((chip) => (
                     <div
                       key={chip.label}
+                      data-ask-section="explanation"
+                      data-ask-label="Explanation overview"
                       className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
                     >
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -1182,6 +1219,8 @@ export function ExplanationSection({
                 {summaryBody.map((block, i) => (
                   <div
                     key={i}
+                    data-ask-section="explanation"
+                    data-ask-label={i === 0 ? "Explanation overview" : "Explanation detail"}
                     className={[
                       "rounded-2xl border px-4 py-4 text-sm leading-7",
                       i === 0
@@ -1199,11 +1238,16 @@ export function ExplanationSection({
           {activeTab === "risk" && (
             <div>
               {riskCommentary.length > 0 ? (
-                <CommentaryCard
-                  title="Risk commentary"
-                  items={riskCommentary}
-                  tone="risk"
-                />
+                <div
+                  data-ask-section="explanation"
+                  data-ask-label="Explanation risk commentary"
+                >
+                  <CommentaryCard
+                    title="Risk commentary"
+                    items={riskCommentary}
+                    tone="risk"
+                  />
+                </div>
               ) : (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
                   No risk commentary available.
@@ -1215,11 +1259,16 @@ export function ExplanationSection({
           {activeTab === "simulation" && (
             <div>
               {simulationCommentary.length > 0 ? (
-                <CommentaryCard
-                  title="Simulation commentary"
-                  items={simulationCommentary}
-                  tone="simulation"
-                />
+                <div
+                  data-ask-section="explanation"
+                  data-ask-label="Explanation simulation commentary"
+                >
+                  <CommentaryCard
+                    title="Simulation commentary"
+                    items={simulationCommentary}
+                    tone="simulation"
+                  />
+                </div>
               ) : (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
                   No simulation commentary available.
@@ -1240,6 +1289,8 @@ export function ExplanationSection({
                     watch.map((item, i) => (
                       <div
                         key={i}
+                        data-ask-section="explanation"
+                        data-ask-label="Explanation watch for"
                         className="rounded-xl border border-amber-200 bg-white/75 px-4 py-3 text-sm leading-6 text-slate-700"
                       >
                         {item}
@@ -1247,10 +1298,18 @@ export function ExplanationSection({
                     ))
                   ) : (
                     <>
-                      <div className="rounded-xl border border-amber-200 bg-white/75 px-4 py-3 text-sm leading-6 text-slate-700">
+                      <div
+                        data-ask-section="explanation"
+                        data-ask-label="Explanation watch for"
+                        className="rounded-xl border border-amber-200 bg-white/75 px-4 py-3 text-sm leading-6 text-slate-700"
+                      >
                         Monitor changes in the largest positions, as they can shift the portfolio’s risk profile.
                       </div>
-                      <div className="rounded-xl border border-amber-200 bg-white/75 px-4 py-3 text-sm leading-6 text-slate-700">
+                      <div
+                        data-ask-section="explanation"
+                        data-ask-label="Explanation watch for"
+                        className="rounded-xl border border-amber-200 bg-white/75 px-4 py-3 text-sm leading-6 text-slate-700"
+                      >
                         Watch for increases in volatility or downside probability in the simulation results.
                       </div>
                     </>
@@ -1268,6 +1327,8 @@ export function ExplanationSection({
                     {takeaways.map((item, i) => (
                       <div
                         key={i}
+                        data-ask-section="explanation"
+                        data-ask-label="Explanation takeaways"
                         className="rounded-xl border border-emerald-200 bg-white/75 px-4 py-3 text-sm leading-6 text-slate-700"
                       >
                         {item}
@@ -1290,6 +1351,8 @@ export function ExplanationSection({
                   {vocabularyEntries.map((item, index) => (
                     <div
                       key={`${item.term}-${index}`}
+                      data-ask-section="explanation"
+                      data-ask-label="Explanation vocabulary"
                       className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 shadow-sm"
                     >
                       <p className="text-sm font-semibold text-slate-900">

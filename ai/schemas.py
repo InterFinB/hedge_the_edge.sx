@@ -80,6 +80,24 @@ class UniverseStatus(BaseModel):
     refresh_summary: str | None = None
 
 
+class SelectionContext(BaseModel):
+    source_type: Literal["text_selection", "section"] | None = None
+    section: (
+        Literal[
+            "explanation",
+            "chat_response",
+            "simulation",
+            "risk",
+            "weights",
+            "allocation",
+            "unknown",
+        ]
+        | None
+    ) = None
+    selected_text: str | None = None
+    surrounding_label: str | None = None
+
+
 # =========================
 # AI CONTEXT
 # =========================
@@ -98,7 +116,7 @@ class AIContext(BaseModel):
     market_data: dict[str, Any] = Field(default_factory=dict)
 
     explanation: dict[str, Any] | str | None = None
-    selection_context: None = None
+    selection_context: SelectionContext | None = None
 
 
 # =========================
