@@ -119,5 +119,6 @@ class AskPortfolioRequest(BaseModel):
 class AskPortfolioResponse(BaseModel):
     answer: str
     why: list[str] = Field(default_factory=list)
+    follow_ups: list[str] = Field(default_factory=list)
     source: str | None = None
     prompt_version: str | None = None

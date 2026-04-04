@@ -18,6 +18,7 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   why?: string[];
+  followUps?: string[];
 };
 
 function buildConversation(
@@ -35,6 +36,7 @@ function makeAssistantMessage(response: AskPortfolioResponse): ChatMessage {
     role: "assistant",
     content: response.answer,
     why: response.why ?? [],
+    followUps: response.follow_ups ?? [],
   };
 }
 
@@ -219,20 +221,20 @@ export default function PortfolioAskBar({
                   ].join(" ")}
                 >
                   {message.role === "assistant" ? (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                         Hedge The Edge AI
                       </div>
 
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         {splitIntoParagraphs(message.content).map((paragraph, index) => (
                           <p
                             key={index}
                             className={[
-                              "leading-7 text-slate-800",
+                              "leading-7",
                               index === 0
-                                ? "text-[15px] font-medium text-slate-950"
-                                : "text-sm",
+                                ? "text-[16px] font-medium text-slate-950"
+                                : "text-[14px] text-slate-700",
                             ].join(" ")}
                           >
                             {paragraph}
@@ -240,23 +242,39 @@ export default function PortfolioAskBar({
                         ))}
                       </div>
 
-                      {message.why && message.why.length > 0 ? (
-                        <details className="pt-1">
-                          <summary className="cursor-pointer text-xs font-medium text-slate-500 transition hover:text-slate-700">
-                            Why?
+                      {message.why && message.why.length > 0 && (
+                        <details className="pt-2">
+                          <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-600">
+                            Why this matters
                           </summary>
                           <div className="mt-3 space-y-2">
-                            {message.why.map((item, index) => (
+                            {message.why.map((item, i) => (
                               <div
-                                key={index}
-                                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-6 text-slate-600"
+                                key={i}
+                                className="text-xs leading-6 text-slate-500"
                               >
-                                {item}
+                                • {item}
                               </div>
                             ))}
                           </div>
                         </details>
-                      ) : null}
+                      )}
+
+                      {message.followUps && message.followUps.length > 0 && (
+                        <div className="flex flex-wrap gap-x-4 gap-y-2 pt-2">
+                          {message.followUps.map((q, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => void submitQuestion(q)}
+                              disabled={loading || disabled}
+                              className="text-left text-xs text-slate-400 transition hover:text-slate-700 disabled:opacity-60"
+                            >
+                              {q}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-2">
