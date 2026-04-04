@@ -10,13 +10,11 @@ import {
   PortfolioStatusNote,
   AllocationChart,
   CategoryExposureChart,
-  TopPositionsPanel,
   RiskContributionChart,
   SimulationDistributionChart,
   SimulationSummary,
   WeightsTable,
   ExplanationSection,
-  DiagnosticsPanel,
 } from "@/components/ui";
 
 import PortfolioAskBar from "@/components/PortfolioAskBar";
@@ -158,8 +156,7 @@ export default function Home() {
                 </h1>
                 <p className="max-w-3xl text-sm leading-6 text-slate-600 sm:text-[15px]">
                   Generate a minimum-risk portfolio for a target return and review
-                  allocation, diagnostics, simulation, explanation, and AI Q&amp;A in
-                  one place.
+                  allocation, simulation, explanation, and AI Q&amp;A in one place.
                 </p>
               </div>
 
@@ -244,43 +241,29 @@ export default function Home() {
               </section>
 
               <section className="grid gap-4 xl:grid-cols-2">
-                <TopPositionsPanel topPositions={result.top_positions} />
                 <RiskContributionChart
                   riskContributions={riskContributionEntries}
                 />
-              </section>
-
-              <section className="grid gap-4 xl:grid-cols-2">
                 <SimulationDistributionChart
                   simulationChart={result.simulation_chart}
                 />
-                <SimulationSummary result={result} />
               </section>
 
+              <SimulationSummary result={result} />
+
               <ExplanationSection explanation={result.explanation} />
+
+              <WeightsTable
+                weights={result.weights}
+                tickerToName={result.ticker_to_name}
+                tickerToCategory={result.ticker_to_category}
+              />
 
               <PortfolioAskBar
                 aiContext={result.ai_context ?? null}
                 explanation={result.explanation}
                 disabled={loading}
               />
-
-              <section className="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
-                <WeightsTable
-                  weights={result.weights}
-                  tickerToName={result.ticker_to_name}
-                />
-                <DiagnosticsPanel
-                  concentration={result.concentration}
-                  diversificationRatio={result.diversification_ratio}
-                  meaningfulPositionsCount={result.meaningful_positions?.length}
-                  topRiskContributions={riskContributionEntries}
-                  prePruneAssets={result.pre_prune_assets}
-                  postPruneAssets={result.post_prune_assets}
-                  concentrationThresholdUsed={result.concentration_threshold_used}
-                  concentrationCapped={result.concentration_capped}
-                />
-              </section>
             </div>
           )}
         </div>

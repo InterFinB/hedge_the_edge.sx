@@ -102,6 +102,7 @@ export default function PortfolioAskBar({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isOpen, setIsOpen] = useState(true);
 
   const hasContext = !!aiContext;
 
@@ -139,6 +140,7 @@ export default function PortfolioAskBar({
     setQuestion("");
     setError("");
     setLoading(true);
+    setIsOpen(true);
 
     try {
       const response = await askPortfolio({
@@ -157,7 +159,11 @@ export default function PortfolioAskBar({
 
   return (
     <section className="rounded-[24px] border border-blue-200 bg-blue-50/80 px-5 py-4 shadow-[0_10px_25px_rgba(15,23,42,0.04)]">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex w-full items-center justify-between gap-3 text-left"
+      >
         <div>
           <div className="font-semibold text-slate-900">Ask Hedge The Edge</div>
           <p className="mt-1 text-sm text-slate-700">
@@ -166,151 +172,160 @@ export default function PortfolioAskBar({
           </p>
         </div>
 
-        <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-          AI context loaded: {hasContext ? "yes" : "no"}
-        </div>
-      </div>
-
-      {!hasContext && (
-        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          The chat component is visible, but no AI context was returned from the
-          backend portfolio response.
-        </div>
-      )}
-
-      {explanationSummary && (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-700">
-          <span className="font-semibold text-slate-900">Current context:</span>{" "}
-          {explanationSummary}
-        </div>
-      )}
-
-      <div className="mt-4 flex gap-2">
-        <input
-          type="text"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              void submitQuestion();
-            }
-          }}
-          disabled={!hasContext || loading || disabled}
-          placeholder="Ask a question about this portfolio..."
-          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
-        />
-        <button
-          type="button"
-          onClick={() => void submitQuestion()}
-          disabled={!hasContext || loading || disabled || !question.trim()}
-          className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {loading ? "Asking..." : "Ask"}
-        </button>
-      </div>
-
-      {!messages.length && hasContext && (
-        <div className="mt-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Try one of these
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {starterSuggestions.map((suggestion) => (
-              <button
-                key={suggestion}
-                type="button"
-                onClick={() => void submitQuestion(suggestion)}
-                disabled={loading || disabled}
-                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:opacity-60"
-              >
-                {suggestion}
-              </button>
-            ))}
+        <div className="flex items-center gap-3">
+          <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
+            {hasContext ? "Connected to portfolio" : "AI context unavailable"}
+          </div>
+          <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+            {isOpen ? "Hide" : "Show"}
           </div>
         </div>
-      )}
+      </button>
 
-      {error && (
-        <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {messages.length > 0 && (
-        <div className="mt-5 space-y-4">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={[
-                "rounded-2xl border px-4 py-4",
-                message.role === "user"
-                  ? "border-slate-200 bg-white"
-                  : "border-blue-200 bg-white/90",
-              ].join(" ")}
-            >
-              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                {message.role === "user" ? "You" : "Hedge The Edge AI"}
-              </div>
-
-              <div className="text-sm leading-7 text-slate-800">
-                {message.content}
-              </div>
-
-              {message.role === "assistant" && message.meta && (
-                <div className="mt-4 space-y-3">
-                  {message.meta.reasoning_summary?.length ? (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                      <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                        Reasoning summary
-                      </div>
-                      <div className="space-y-2">
-                        {message.meta.reasoning_summary.map((item, index) => (
-                          <div key={index} className="text-sm text-slate-700">
-                            {item}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {message.meta.watch_for?.length ? (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                      <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">
-                        Watch for
-                      </div>
-                      <div className="space-y-2">
-                        {message.meta.watch_for.map((item, index) => (
-                          <div key={index} className="text-sm text-slate-700">
-                            {item}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {message.meta.follow_up_suggestions?.length ? (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                      <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
-                        Follow-up ideas
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {message.meta.follow_up_suggestions.map((item, index) => (
-                          <button
-                            key={`${item}-${index}`}
-                            type="button"
-                            onClick={() => void submitQuestion(item)}
-                            className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-emerald-300 hover:text-slate-950"
-                          >
-                            {item}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              )}
+      {isOpen && (
+        <div className="mt-4">
+          {!hasContext && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              The chat component is visible, but no AI context was returned from the
+              backend portfolio response.
             </div>
-          ))}
+          )}
+
+          {explanationSummary && (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-700">
+              <span className="font-semibold text-slate-900">Current context:</span>{" "}
+              {explanationSummary}
+            </div>
+          )}
+
+          <div className="mt-4 flex gap-2">
+            <input
+              type="text"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  void submitQuestion();
+                }
+              }}
+              disabled={!hasContext || loading || disabled}
+              placeholder="Ask a question about this portfolio..."
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+            />
+            <button
+              type="button"
+              onClick={() => void submitQuestion()}
+              disabled={!hasContext || loading || disabled || !question.trim()}
+              className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "Asking..." : "Ask"}
+            </button>
+          </div>
+
+          {!messages.length && hasContext && (
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                Try one of these
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {starterSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => void submitQuestion(suggestion)}
+                    disabled={loading || disabled}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:opacity-60"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {messages.length > 0 && (
+            <div className="mt-5 space-y-4">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={[
+                    "rounded-2xl border px-4 py-4",
+                    message.role === "user"
+                      ? "border-slate-200 bg-white"
+                      : "border-blue-200 bg-white/90",
+                  ].join(" ")}
+                >
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    {message.role === "user" ? "You" : "Hedge The Edge AI"}
+                  </div>
+
+                  <div className="text-sm leading-7 text-slate-800">
+                    {message.content}
+                  </div>
+
+                  {message.role === "assistant" && message.meta && (
+                    <div className="mt-4 space-y-3">
+                      {message.meta.reasoning_summary?.length ? (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                            Reasoning summary
+                          </div>
+                          <div className="space-y-2">
+                            {message.meta.reasoning_summary.map((item, index) => (
+                              <div key={index} className="text-sm text-slate-700">
+                                {item}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {message.meta.watch_for?.length ? (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">
+                            Watch for
+                          </div>
+                          <div className="space-y-2">
+                            {message.meta.watch_for.map((item, index) => (
+                              <div key={index} className="text-sm text-slate-700">
+                                {item}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {message.meta.follow_up_suggestions?.length ? (
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800">
+                            Follow-up ideas
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {message.meta.follow_up_suggestions.map((item, index) => (
+                              <button
+                                key={`${item}-${index}`}
+                                type="button"
+                                onClick={() => void submitQuestion(item)}
+                                className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-emerald-300 hover:text-slate-950"
+                              >
+                                {item}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </section>

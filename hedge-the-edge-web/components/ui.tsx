@@ -19,7 +19,6 @@ import type {
   CategoryExposureDatum,
   ExplanationBlock,
   PortfolioResponse,
-  TopPositionDatum,
 } from "@/types/portfolio";
 
 /* =========================================================
@@ -292,11 +291,10 @@ export function PortfolioOverview({ result }: { result: PortfolioResponse }) {
           : "—",
     },
     {
-      title: "Threshold used",
+      title: "Concentration index",
       value:
-        result.concentration_threshold_used !== undefined &&
-        result.concentration_threshold_used !== null
-          ? `${(result.concentration_threshold_used * 100).toFixed(1)}%`
+        result.concentration !== undefined && result.concentration !== null
+          ? result.concentration.toFixed(4)
           : "—",
     },
     {
@@ -602,59 +600,6 @@ export function CategoryExposureChart({
 }
 
 /* =========================================================
-   backend-ranked top positions
-========================================================= */
-
-export function TopPositionsPanel({
-  topPositions,
-}: {
-  topPositions?: TopPositionDatum[];
-}) {
-  const rows = (topPositions || []).filter((x) => x.weight > 0);
-
-  if (rows.length === 0) return null;
-
-  return (
-    <Box
-      title="Top positions"
-      rightSlot={
-        <span className="text-xs text-slate-400">backend-ranked</span>
-      }
-    >
-      <div className="space-y-2">
-        {rows.map((item, index) => (
-          <div
-            key={`${item.ticker}-${index}`}
-            className="grid grid-cols-[28px_minmax(0,1fr)_90px] items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-3"
-          >
-            <span className="text-xs font-medium text-slate-500">
-              {index + 1}
-            </span>
-
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-slate-900">
-                {item.ticker} ({item.name || item.ticker})
-              </div>
-              {item.category ? (
-                <div className="mt-0.5 truncate text-xs text-slate-500">
-                  {item.category}
-                </div>
-              ) : null}
-            </div>
-
-            <span className="text-right text-sm font-semibold text-slate-900">
-              {typeof item.weight_percent === "number"
-                ? `${item.weight_percent.toFixed(2)}%`
-                : pct(item.weight)}
-            </span>
-          </div>
-        ))}
-      </div>
-    </Box>
-  );
-}
-
-/* =========================================================
    risk contribution chart
 ========================================================= */
 
@@ -833,7 +778,10 @@ export function SimulationSummary({ result }: { result: PortfolioResponse }) {
   const cards = [
     { label: "Mean", value: pct(s?.mean_return ?? compact?.mean) },
     { label: "Median", value: pct(s?.median_return ?? compact?.median) },
-    { label: "Loss prob.", value: pct(s?.loss_probability ?? compact?.loss_probability) },
+    {
+      label: "Loss prob.",
+      value: pct(s?.loss_probability ?? compact?.loss_probability),
+    },
     { label: "5th pct.", value: pct(s?.percentile_5 ?? compact?.p5) },
     { label: "95th pct.", value: pct(s?.percentile_95 ?? compact?.p95) },
   ];
@@ -860,15 +808,17 @@ export function SimulationSummary({ result }: { result: PortfolioResponse }) {
 }
 
 /* =========================================================
-   weights table
+   weights table (merged with top positions)
 ========================================================= */
 
 export function WeightsTable({
   weights,
   tickerToName,
+  tickerToCategory,
 }: {
   weights: Record<string, number>;
   tickerToName?: Record<string, string>;
+  tickerToCategory?: Record<string, string>;
 }) {
   const rows = Object.entries(weights)
     .filter(([_, v]) => v > 0.001)
@@ -878,14 +828,15 @@ export function WeightsTable({
     <Box
       title="Weights"
       rightSlot={
-        <span className="text-xs text-slate-400">meaningful positions only</span>
+        <span className="text-xs text-slate-400">ranked meaningful positions</span>
       }
     >
-      <div className="max-h-[280px] overflow-y-auto rounded-2xl border border-slate-200 bg-white">
-        <div className="grid grid-cols-[44px_92px_minmax(0,1fr)_96px] border-b border-slate-200 bg-slate-50/80 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+      <div className="max-h-[360px] overflow-y-auto rounded-2xl border border-slate-200 bg-white">
+        <div className="grid grid-cols-[44px_92px_minmax(0,1.2fr)_minmax(0,0.9fr)_96px] border-b border-slate-200 bg-slate-50/80 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
           <span>#</span>
           <span>Ticker</span>
           <span>Name</span>
+          <span>Category</span>
           <span className="text-right">Weight</span>
         </div>
 
@@ -893,13 +844,30 @@ export function WeightsTable({
           {rows.map(([ticker, weight], index) => (
             <div
               key={ticker}
-              className="grid grid-cols-[44px_92px_minmax(0,1fr)_96px] items-center px-4 py-3 text-sm"
+              className={[
+                "grid grid-cols-[44px_92px_minmax(0,1.2fr)_minmax(0,0.9fr)_96px] items-center px-4 py-3 text-sm",
+                index < 5 ? "bg-slate-50/40" : "",
+              ].join(" ")}
             >
               <span className="text-slate-400">{index + 1}</span>
+
               <span className="font-semibold text-slate-950">{ticker}</span>
-              <span className="truncate text-slate-600">
-                {tickerName(ticker, tickerToName)}
+
+              <div className="min-w-0">
+                <div className="truncate text-slate-700">
+                  {tickerName(ticker, tickerToName)}
+                </div>
+                {index < 5 ? (
+                  <div className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">
+                    Top position
+                  </div>
+                ) : null}
+              </div>
+
+              <span className="truncate text-slate-500">
+                {tickerToCategory?.[ticker] || "—"}
               </span>
+
               <span className="text-right font-semibold text-slate-950">
                 {pct(weight)}
               </span>
@@ -1343,176 +1311,5 @@ export function ExplanationSection({
         </div>
       </section>
     </section>
-  );
-}
-
-/* =========================================================
-   diagnostics block
-========================================================= */
-
-export function DiagnosticsPanel({
-  concentration,
-  diversificationRatio,
-  meaningfulPositionsCount,
-  topRiskContributions,
-  prePruneAssets,
-  postPruneAssets,
-  concentrationThresholdUsed,
-  concentrationCapped,
-}: {
-  concentration?: number;
-  diversificationRatio?: number;
-  meaningfulPositionsCount?: number;
-  topRiskContributions: { ticker: string; value: number }[];
-  prePruneAssets?: number;
-  postPruneAssets?: number;
-  concentrationThresholdUsed?: number;
-  concentrationCapped?: boolean;
-}) {
-  const filtered = (topRiskContributions || []).filter((x) => x.value > 0);
-  const total = filtered.reduce((sum, item) => sum + item.value, 0);
-
-  const topRows =
-    total > 0
-      ? filtered.slice(0, 5).map((item) => ({
-          ticker: item.ticker,
-          value: Number(((item.value / total) * 100).toFixed(2)),
-        }))
-      : [];
-
-  const holdingsShown = postPruneAssets ?? meaningfulPositionsCount;
-
-  let concentrationLabel = "Balanced";
-  let concentrationTone = "border-slate-200 bg-slate-50 text-slate-700";
-
-  if (typeof holdingsShown === "number") {
-    if (holdingsShown <= 10) {
-      concentrationLabel = "Highly concentrated";
-      concentrationTone = "border-amber-200 bg-amber-50 text-amber-800";
-    } else if (holdingsShown <= 15) {
-      concentrationLabel = "Concentrated";
-      concentrationTone = "border-blue-200 bg-blue-50 text-blue-800";
-    } else if (holdingsShown <= 20) {
-      concentrationLabel = "Balanced";
-      concentrationTone = "border-emerald-200 bg-emerald-50 text-emerald-800";
-    } else {
-      concentrationLabel = "Broad";
-      concentrationTone = "border-slate-200 bg-slate-50 text-slate-700";
-    }
-  }
-
-  return (
-    <Box
-      title="Diagnostics"
-      rightSlot={
-        <span
-          className={`rounded-full border px-3 py-1 text-xs font-semibold ${concentrationTone}`}
-        >
-          {concentrationLabel}
-        </span>
-      }
-    >
-      <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Concentration
-          </p>
-          <p className="mt-2 text-lg font-semibold text-slate-950">
-            {num(concentration, 4)}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Higher values indicate more weight concentrated in fewer names.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Diversification ratio
-          </p>
-          <p className="mt-2 text-lg font-semibold text-slate-950">
-            {num(diversificationRatio, 4)}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Higher values generally suggest broader risk spreading.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Final positions
-          </p>
-          <p className="mt-2 text-lg font-semibold text-slate-950">
-            {holdingsShown ?? "—"}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Holdings that survived the final concentration step.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Before concentration
-          </p>
-          <p className="mt-2 text-lg font-semibold text-slate-950">
-            {prePruneAssets ?? "—"}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Raw optimizer holdings before pruning and cap logic.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Threshold used
-          </p>
-          <p className="mt-2 text-lg font-semibold text-slate-950">
-            {concentrationThresholdUsed !== undefined
-              ? `${(concentrationThresholdUsed * 100).toFixed(1)}%`
-              : "—"}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Minimum weight used to keep a position meaningful.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            20-asset cap
-          </p>
-          <p className="mt-2 text-lg font-semibold text-slate-950">
-            {concentrationCapped ? "Applied" : "Not needed"}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Shows whether the portfolio had to be trimmed to the maximum count.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 lg:col-span-2 2xl:col-span-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Top risk drivers
-          </p>
-
-          {topRows.length > 0 ? (
-            <div className="mt-3 space-y-2">
-              {topRows.map((item) => (
-                <div
-                  key={item.ticker}
-                  className="flex items-center justify-between text-sm"
-                >
-                  <span className="text-slate-700">{item.ticker}</span>
-                  <span className="font-semibold text-slate-950">
-                    {item.value.toFixed(2)}%
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-slate-500">
-              No risk contribution data available.
-            </p>
-          )}
-        </div>
-      </div>
-    </Box>
   );
 }
