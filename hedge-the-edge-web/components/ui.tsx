@@ -732,6 +732,42 @@ function normalizeSimulationChart(input: unknown) {
   return [];
 }
 
+function SimulationDistributionTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{
+    payload?: {
+      bucketLabel?: string;
+      simulationCount?: number;
+    };
+  }>;
+}) {
+  if (!active || !payload?.length || !payload[0]?.payload) {
+    return null;
+  }
+
+  const bucketLabel = payload[0].payload.bucketLabel ?? "—";
+  const simulationCount = payload[0].payload.simulationCount;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+      <div className="text-sm font-medium text-slate-900">
+        Return bucket: {bucketLabel}
+      </div>
+      <div className="mt-2 text-sm text-slate-700">
+        Simulations:{" "}
+        <span className="font-semibold text-slate-900">
+          {typeof simulationCount === "number"
+            ? simulationCount.toFixed(0)
+            : "—"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function SimulationDistributionChart({
   simulationChart,
 }: {
@@ -780,21 +816,7 @@ export function SimulationDistributionChart({
               axisLine={false}
               domain={[0, Math.max(5, Math.ceil(maxCount * 1.1))]}
             />
-            <Tooltip
-              formatter={(value) => {
-                const numericValue =
-                  typeof value === "number"
-                    ? value
-                    : typeof value === "string"
-                    ? Number(value)
-                    : NaN;
-
-                return Number.isFinite(numericValue)
-                  ? `${numericValue.toFixed(0)} simulations`
-                  : "N/A";  
-              }}
-              labelFormatter={(label) => `Return bucket: ${label}`}
-            />
+            <Tooltip content={<SimulationDistributionTooltip />} />
             <Bar dataKey="simulationCount" radius={[8, 8, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
