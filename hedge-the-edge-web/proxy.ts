@@ -26,6 +26,7 @@ export async function proxy(request: NextRequest) {
   const isPublicPath =
     pathname === "/login" ||
     pathname === "/awaiting-approval" ||
+    pathname === "/access-approved" ||
     pathname.startsWith("/auth/callback") ||
     pathname.startsWith("/api/send-approval-email");
 
