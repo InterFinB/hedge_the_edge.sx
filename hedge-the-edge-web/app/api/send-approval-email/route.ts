@@ -85,24 +85,24 @@ export async function POST(request: Request) {
   const { data, error } = await resend.emails.send({
     from: process.env.APPROVAL_EMAIL_FROM,
     to: [record.email],
-    subject: "Your Hedge The Edge access has been approved",
+    subject: "Your Hedge The Edge access is active",
     html: `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background-color: #f9fafb; padding: 40px 20px;">
         <div style="max-width: 520px; margin: 0 auto; background: white; border-radius: 16px; padding: 32px; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
           <p style="font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b7280; margin-bottom: 8px;">
-            Access approved
+            Access active
           </p>
 
           <h2 style="font-size: 24px; margin-bottom: 16px; color: #111827;">
-            Your access has been approved
+            Your access is ready
           </h2>
 
           <p style="font-size: 15px; color: #374151; line-height: 1.6;">
-            Your access to <strong>Hedge The Edge</strong> is now active.
+            Your access to <strong>Hedge The Edge</strong> has been approved.
           </p>
 
           <p style="font-size: 15px; color: #374151; line-height: 1.6; margin-top: 12px;">
-            Click below to continue to your sign-in page and enter the app.
+            Use the button below to open your sign-in page. There, enter your approved email address and you’ll receive the secure sign-in link that takes you into the app.
           </p>
 
           <div style="margin: 24px 0;">
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
               href="${approvedAccessUrl}"
               style="display: inline-block; background: #111827; color: white; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-size: 14px;"
             >
-              Continue to sign in
+              Open my sign-in page
             </a>
           </div>
 

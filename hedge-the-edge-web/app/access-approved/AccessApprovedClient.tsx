@@ -39,7 +39,9 @@ export default function AccessApprovedClient() {
       return;
     }
 
-    setMessage("Your sign-in link has been sent. Check your inbox.");
+    setMessage(
+      "Your secure sign-in link has been sent. Open it from your inbox to enter Hedge The Edge."
+    );
     setLoading(false);
   }
 
@@ -49,16 +51,24 @@ export default function AccessApprovedClient() {
         <div className="grid w-full gap-10 md:grid-cols-[1.1fr_0.9fr]">
           <section className="space-y-6">
             <div className="inline-flex items-center rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium uppercase tracking-[0.24em] text-neutral-600">
-              Access approved
+              Access active
             </div>
 
             <div className="space-y-4">
               <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-                Welcome to Hedge The Edge
+                Your access is ready
               </h1>
               <p className="max-w-xl text-base leading-7 text-neutral-600 sm:text-lg">
-                Your access is now active. Enter your email below and we’ll send
-                you a magic sign-in link.
+                You already have access to Hedge The Edge. Enter your approved
+                email address below and we’ll send your secure sign-in link.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
+              <p className="text-sm leading-6 text-neutral-700">
+                This page is only for approved users. After you submit your email,
+                use the sign-in link from your inbox and you’ll be taken straight
+                into the app.
               </p>
             </div>
           </section>
@@ -66,10 +76,10 @@ export default function AccessApprovedClient() {
           <section className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm sm:p-8">
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold tracking-tight">
-                Continue to the app
+                Enter the app
               </h2>
               <p className="text-sm leading-6 text-neutral-600">
-                Use the same approved email address.
+                Use the same email address that was approved.
               </p>
             </div>
 
@@ -79,7 +89,7 @@ export default function AccessApprovedClient() {
                   htmlFor="email"
                   className="text-sm font-medium text-neutral-800"
                 >
-                  Email address
+                  Approved email address
                 </label>
                 <input
                   id="email"
@@ -97,18 +107,18 @@ export default function AccessApprovedClient() {
                 disabled={loading}
                 className="w-full rounded-2xl bg-neutral-950 px-4 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? "Sending link..." : "Send sign-in link"}
+                {loading ? "Sending sign-in link..." : "Send my sign-in link"}
               </button>
             </form>
 
             {message ? (
-              <p className="mt-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+              <p className="mt-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm leading-6 text-green-800">
                 {message}
               </p>
             ) : null}
 
             {error ? (
-              <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
                 {error}
               </p>
             ) : null}
