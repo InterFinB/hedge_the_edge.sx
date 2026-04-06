@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 
+import SignOutButton from "@/components/SignOutButton";
+
 import {
   PortfolioForm,
   LoadingFacts,
@@ -171,6 +173,10 @@ export default function Home() {
   return (
     <main className="relative min-h-screen bg-[radial-gradient(circle_at_top,#f8fafc_0%,#eef2f7_45%,#e5ebf3_100%)] text-slate-900">
       <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-4 flex justify-end">
+          <SignOutButton />
+        </div>
+
         <header className="mb-6">
           <div className="rounded-[28px] border border-white/70 bg-white/80 px-6 py-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] backdrop-blur">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
