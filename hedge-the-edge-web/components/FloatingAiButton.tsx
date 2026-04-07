@@ -65,8 +65,8 @@ export default function FloatingAiButton({
           <Image
             src="/hedge-icon.png"
             alt="Hedge the Edge"
-            width={44}
-            height={44}
+            width={54}
+            height={54}
             className="h-11 w-11 object-contain"
             priority
           />

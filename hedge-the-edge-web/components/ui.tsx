@@ -139,20 +139,22 @@ export function PortfolioForm({
 }) {
   return (
     <section className="rounded-[28px] border border-white/70 bg-white/88 p-6 shadow-[0_8px_28px_rgba(15,23,42,0.06)] backdrop-blur">
-      <div className="mb-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-          Portfolio inputs
-        </p>
-        <p className="mt-3 text-base text-slate-600 sm:text-[15px]">
-          Set return and optional volatility guardrails.
-        </p>
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Portfolio inputs
+          </p>
+          <p className="mt-1 text-sm text-slate-600">
+            Set return and optional volatility guardrails.
+          </p>
+        </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        <div className="space-y-3">
+      <div className="grid gap-5 md:grid-cols-2">
+        <div>
           <label
             htmlFor="target-return"
-            className="block text-[15px] font-medium text-slate-700"
+            className="mb-2 block text-sm font-medium text-slate-700"
           >
             Target return (%)
           </label>
@@ -164,18 +166,18 @@ export function PortfolioForm({
             autoComplete="off"
             value={targetReturnInput}
             onChange={(e) => setTargetReturnInput(e.target.value)}
-            placeholder="e.g. 12"
-            className="h-[74px] w-full rounded-[24px] border border-slate-200 bg-slate-50/80 px-6 text-[18px] font-medium text-slate-900 outline-none transition duration-200 placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-200/50"
+            placeholder="e.g. 10"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
           />
-          <p className="text-sm leading-6 text-slate-500">
+          <p className="mt-2 text-xs text-slate-500">
             Enter a yearly target return like 8, 10, or 12.
           </p>
         </div>
 
-        <div className="space-y-3">
+        <div>
           <label
             htmlFor="max-volatility"
-            className="block text-[15px] font-medium text-slate-700"
+            className="mb-2 block text-sm font-medium text-slate-700"
           >
             Max volatility (%) — optional
           </label>
@@ -188,22 +190,22 @@ export function PortfolioForm({
             value={maxVolatilityInput}
             onChange={(e) => setMaxVolatilityInput(e.target.value)}
             placeholder="e.g. 15"
-            className="h-[74px] w-full rounded-[24px] border border-slate-200 bg-slate-50/80 px-6 text-[18px] font-medium text-slate-900 outline-none transition duration-200 placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-200/50"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
           />
-          <p className="text-sm leading-6 text-slate-500">
+          <p className="mt-2 text-xs text-slate-500">
             Leave blank if you do not want a volatility cap.
           </p>
         </div>
       </div>
 
-      <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
+      <div className="mt-6 flex items-center gap-4">
         <button
           type="button"
           onClick={onSubmit}
           disabled={loading}
-          className="inline-flex h-[66px] items-center justify-center rounded-full bg-slate-950 px-9 text-lg font-semibold text-white shadow-[0_18px_35px_rgba(15,23,42,0.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-slate-900 hover:shadow-[0_22px_45px_rgba(15,23,42,0.22)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+          className="rounded-full bg-slate-950 px-7 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-slate-900 hover:shadow-[0_14px_30px_rgba(15,23,42,0.22)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
         >
-          {loading ? "Generating..." : "Generate portfolio"}
+          {loading ? "Generating portfolio..." : "Generate portfolio"}
         </button>
       </div>
 
