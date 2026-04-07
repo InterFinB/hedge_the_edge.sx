@@ -1,16 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export default function AccessApprovedClient() {
-  const supabase = useMemo(() => createClient(), []);
   const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -21,28 +18,33 @@ export default function AccessApprovedClient() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
-    setMessage(null);
     setError(null);
 
-    const trimmedEmail = email.trim();
+    try {
+      const response = await fetch("/api/direct-approved-login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: email.trim() }),
+      });
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email: trimmedEmail,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+      const data = (await response.json()) as {
+        error?: string;
+        redirectTo?: string;
+      };
 
-    if (error) {
-      setError(error.message);
+      if (!response.ok || !data.redirectTo) {
+        setError(data.error ?? "Unable to continue.");
+        setLoading(false);
+        return;
+      }
+
+      window.location.href = data.redirectTo;
+    } catch {
+      setError("Unable to continue. Please try again.");
       setLoading(false);
-      return;
     }
-
-    setMessage(
-      "Your secure sign-in link has been sent. Open it from your inbox to enter Hedge The Edge."
-    );
-    setLoading(false);
   }
 
   return (
@@ -59,16 +61,13 @@ export default function AccessApprovedClient() {
                 Your access is ready
               </h1>
               <p className="max-w-xl text-base leading-7 text-neutral-600 sm:text-lg">
-                You already have access to Hedge The Edge. Enter your approved
-                email address below and we’ll send your secure sign-in link.
+                Enter your approved email address below and continue straight into Hedge The Edge.
               </p>
             </div>
 
             <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
               <p className="text-sm leading-6 text-neutral-700">
-                This page is only for approved users. After you submit your email,
-                use the sign-in link from your inbox and you’ll be taken straight
-                into the app.
+                This page is only for approved users.
               </p>
             </div>
           </section>
@@ -107,15 +106,9 @@ export default function AccessApprovedClient() {
                 disabled={loading}
                 className="w-full rounded-2xl bg-neutral-950 px-4 py-3 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? "Sending sign-in link..." : "Send my sign-in link"}
+                {loading ? "Opening app..." : "Continue to Hedge The Edge"}
               </button>
             </form>
-
-            {message ? (
-              <p className="mt-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm leading-6 text-green-800">
-                {message}
-              </p>
-            ) : null}
 
             {error ? (
               <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
