@@ -67,7 +67,7 @@ export default function FloatingAiButton({
             alt="Hedge the Edge"
             width={54}
             height={54}
-            className="h-11 w-11 object-contain"
+            className="h-11 w-11 object-cover scale-[1.6]"
             priority
           />
         </div>
