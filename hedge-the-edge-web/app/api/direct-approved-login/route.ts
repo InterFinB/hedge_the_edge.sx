@@ -33,7 +33,10 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as { email?: string };
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid JSON body" },
+      { status: 400 }
+    );
   }
 
   const email = body.email?.trim().toLowerCase();
