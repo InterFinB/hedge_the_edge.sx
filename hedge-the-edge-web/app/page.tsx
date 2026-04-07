@@ -1,8 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import SignOutButton from "@/components/SignOutButton";
+import FloatingAiButton from "@/components/FloatingAiButton";
 
 import {
   PortfolioForm,
@@ -184,9 +186,24 @@ export default function Home() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
                   Portfolio intelligence
                 </p>
-                <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-                  Hedge the Edge
-                </h1>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-slate-200 shadow-sm">
+                    <Image
+                      src="/hedge-icon.png"
+                      alt="Hedge the Edge"
+                      width={32}
+                      height={32}
+                      className="h-8 w-8 object-contain"
+                      priority
+                    />
+                  </div>
+
+                  <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+                    Hedge the Edge
+                  </h1>
+                </div>
+
                 <p className="max-w-3xl text-sm leading-6 text-slate-600 sm:text-[15px]">
                   Generate a minimum-risk portfolio for a target return and review
                   allocation, simulation, explanation, and AI Q&amp;A in one place.
@@ -292,18 +309,23 @@ export default function Home() {
                 tickerToCategory={result.ticker_to_category}
               />
 
-              <PortfolioAskBar
-                aiContext={result.ai_context ?? null}
-                disabled={loading}
-                externalAsk={externalAsk}
-              />
+              <section id="portfolio-ai" className="scroll-mt-24">
+                <PortfolioAskBar
+                  aiContext={result.ai_context ?? null}
+                  disabled={loading}
+                  externalAsk={externalAsk}
+                />
+              </section>
             </div>
           )}
         </div>
       </div>
 
       {result && (
-        <SelectionAskBubble selection={selection} onAsk={handleSelectionAsk} />
+        <>
+          <SelectionAskBubble selection={selection} onAsk={handleSelectionAsk} />
+          <FloatingAiButton targetId="portfolio-ai" />
+        </>
       )}
     </main>
   );
