@@ -8,7 +8,24 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: Request) {
   if (!process.env.APP_BASE_URL) {
-    return NextResponse.json({ error: "Missing APP_BASE_URL" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Missing APP_BASE_URL" },
+      { status: 500 }
+    );
+  }
+
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return NextResponse.json(
+      { error: "Missing NEXT_PUBLIC_SUPABASE_URL" },
+      { status: 500 }
+    );
+  }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json(
+      { error: "Missing SUPABASE_SERVICE_ROLE_KEY" },
+      { status: 500 }
+    );
   }
 
   let body: { email?: string };
@@ -22,7 +39,10 @@ export async function POST(request: Request) {
   const email = body.email?.trim().toLowerCase();
 
   if (!email) {
-    return NextResponse.json({ error: "Email is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Email is required" },
+      { status: 400 }
+    );
   }
 
   const { data: profile, error: profileError } = await supabaseAdmin
@@ -32,26 +52,40 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (profileError) {
-    return NextResponse.json({ error: "Failed to check approval status" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to check approval status" },
+      { status: 500 }
+    );
   }
 
   if (!profile || profile.status !== "approved") {
-    return NextResponse.json({ error: "This email is not approved yet." }, { status: 403 });
+    return NextResponse.json(
+      { error: "This email is not approved yet." },
+      { status: 403 }
+    );
   }
 
   const { data, error } = await supabaseAdmin.auth.admin.generateLink({
     type: "magiclink",
     email,
     options: {
-      redirectTo: `${process.env.APP_BASE_URL}/auth/callback`,
+      redirectTo: `${process.env.APP_BASE_URL}/`,
     },
   });
 
-  const actionLink = data?.properties?.action_link;
+  const tokenHash = data?.properties?.hashed_token;
 
-  if (error || !actionLink) {
-    return NextResponse.json({ error: "Failed to generate login link" }, { status: 500 });
+  if (error || !tokenHash) {
+    return NextResponse.json(
+      { error: "Failed to generate login link" },
+      { status: 500 }
+    );
   }
 
-  return NextResponse.json({ redirectTo: actionLink });
+  const callbackUrl =
+    `${process.env.APP_BASE_URL}/auth/callback` +
+    `?token_hash=${encodeURIComponent(tokenHash)}` +
+    `&type=email`;
+
+  return NextResponse.json({ redirectTo: callbackUrl });
 }
