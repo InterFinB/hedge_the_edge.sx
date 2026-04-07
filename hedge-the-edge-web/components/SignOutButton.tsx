@@ -11,10 +11,30 @@ export default function SignOutButton() {
 
   async function handleSignOut() {
     setLoading(true);
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-    setLoading(false);
+
+    let email = "";
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      email = user?.email?.trim().toLowerCase() ?? "";
+
+      if (email) {
+        localStorage.setItem("hte_last_approved_email", email);
+      }
+
+      await supabase.auth.signOut();
+    } finally {
+      const destination = email
+        ? `/access-approved?email=${encodeURIComponent(email)}`
+        : "/access-approved";
+
+      router.push(destination);
+      router.refresh();
+      setLoading(false);
+    }
   }
 
   return (

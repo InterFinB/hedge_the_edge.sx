@@ -1,14 +1,24 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const supabase = useMemo(() => createClient(), []);
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("hte_last_approved_email") ?? "";
+    if (savedEmail) {
+      router.replace(`/access-approved?email=${encodeURIComponent(savedEmail)}`);
+    }
+  }, [router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -16,7 +26,7 @@ export default function LoginPage() {
     setMessage(null);
     setError(null);
 
-    const trimmedEmail = email.trim();
+    const trimmedEmail = email.trim().toLowerCase();
 
     const { error } = await supabase.auth.signInWithOtp({
       email: trimmedEmail,
