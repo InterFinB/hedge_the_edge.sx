@@ -187,14 +187,14 @@ export default function Home() {
                   Portfolio intelligence
                 </p>
 
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white ring-1 ring-slate-200 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white ring-1 ring-slate-200 shadow-sm">
                     <Image
                       src="/hedge-icon.png"
                       alt="Hedge the Edge"
-                      width={32}
-                      height={32}
-                      className="h-8 w-8 object-contain"
+                      width={40}
+                      height={40}
+                      className="h-10 w-10 object-contain"
                       priority
                     />
                   </div>
