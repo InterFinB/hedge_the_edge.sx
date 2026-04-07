@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -100,6 +101,15 @@ export default function LoginPage() {
                 {loading ? "Sending link..." : "Send magic link"}
               </button>
             </form>
+
+            <div className="mt-4 text-center">
+              <Link
+                href="/access-approved"
+                className="text-sm text-neutral-500 underline underline-offset-4 transition hover:text-neutral-700"
+              >
+                I was given access
+              </Link>
+            </div>
 
             {message ? (
               <p className="mt-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
