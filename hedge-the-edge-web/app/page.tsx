@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useMemo, useState } from "react";
 
 import SignOutButton from "@/components/SignOutButton";
@@ -179,30 +178,17 @@ export default function Home() {
           <SignOutButton />
         </div>
 
-        <header className="mb-6">
-          <div className="rounded-[28px] border border-white/70 bg-white/80 px-6 py-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] backdrop-blur">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="space-y-2">
+        <header className="mb-5">
+          <div className="rounded-[28px] border border-white/70 bg-white/80 px-6 py-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)] backdrop-blur sm:px-7 sm:py-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
                   Portfolio intelligence
                 </p>
 
-                <div className="flex items-center gap-4">
-                  <div className="group flex h-12 w-12 items-center justify-center rounded-full bg-white ring-1 ring-slate-200 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_22px_rgba(15,23,42,0.12)]">
-                    <Image
-                      src="/hedge-icon.png"
-                      alt="Hedge the Edge"
-                      width={60}
-                      height={60}
-                      className="h-10 w-10 object-cover transition duration-300 group-hover:scale-[1.7]"
-                      priority
-                    />
-                  </div>
-
-                  <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-                    Hedge the Edge
-                  </h1>
-                </div>
+                <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+                  Hedge the Edge
+                </h1>
 
                 <p className="max-w-3xl text-sm leading-6 text-slate-600 sm:text-[15px]">
                   Generate a minimum-risk portfolio for a target return and review
@@ -210,7 +196,7 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="inline-flex items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <div className="inline-flex items-center self-start rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 lg:self-auto">
                 <span className="mr-2 h-2 w-2 rounded-full bg-emerald-500" />
                 <span className="font-medium text-slate-900">Dashboard mode:</span>
                 <span className="ml-1">compact</span>
