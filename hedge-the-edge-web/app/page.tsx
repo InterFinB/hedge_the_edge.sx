@@ -192,8 +192,8 @@ export default function Home() {
                     <Image
                       src="/hedge-icon.png"
                       alt="Hedge the Edge"
-                      width={40}
-                      height={40}
+                      width={60}
+                      height={60}
                       className="h-10 w-10 object-cover scale-[1.6]"
                       priority
                     />
