@@ -188,13 +188,13 @@ export default function Home() {
                 </p>
 
                 <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white ring-1 ring-slate-200 shadow-sm">
+                  <div className="group flex h-12 w-12 items-center justify-center rounded-full bg-white ring-1 ring-slate-200 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_22px_rgba(15,23,42,0.12)]">
                     <Image
                       src="/hedge-icon.png"
                       alt="Hedge the Edge"
                       width={60}
                       height={60}
-                      className="h-10 w-10 object-cover scale-[1.6]"
+                      className="h-10 w-10 object-cover transition duration-300 group-hover:scale-[1.7]"
                       priority
                     />
                   </div>
