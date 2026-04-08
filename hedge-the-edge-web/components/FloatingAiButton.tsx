@@ -63,7 +63,7 @@ export default function FloatingAiButton({
           Ask Hedge the Edge AI
         </span>
 
-        <span className="absolute right-2 top-2 flex h-3 w-3">
+        <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60" />
           <span className="relative inline-flex h-3 w-3 rounded-full border border-white bg-emerald-500 shadow-sm" />
         </span>
