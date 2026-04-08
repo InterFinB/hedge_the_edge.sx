@@ -295,7 +295,7 @@ export default function Home() {
                 tickerToCategory={result.ticker_to_category}
               />
 
-              <section id="portfolio-ai" className="scroll-mt-24">
+              <section id="portfolio-ai" className="scroll-mt-24 pt-2">
                 <PortfolioAskBar
                   aiContext={result.ai_context ?? null}
                   disabled={loading}

@@ -1,78 +1,37 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
 
-type FloatingAiButtonProps = {
-  targetId: string;
-};
-
-export default function FloatingAiButton({
-  targetId,
-}: FloatingAiButtonProps) {
-  const [isNearTarget, setIsNearTarget] = useState(false);
+export default function FloatingAiButton({ targetId }: { targetId: string }) {
+  const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
-    const target = document.getElementById(targetId);
-    if (!target) return;
+    const el = document.getElementById(targetId);
+    if (!el) return;
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsNearTarget(entry.isIntersecting);
-      },
-      {
-        threshold: 0.15,
-        rootMargin: "0px 0px -120px 0px",
-      }
+    const obs = new IntersectionObserver(
+      ([e]) => setHidden(e.isIntersecting),
+      { threshold: 0.2 }
     );
 
-    observer.observe(target);
-
-    return () => observer.disconnect();
+    obs.observe(el);
+    return () => obs.disconnect();
   }, [targetId]);
-
-  const handleClick = () => {
-    const target = document.getElementById(targetId);
-    if (!target) return;
-
-    target.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  };
 
   return (
     <div
-      className={[
-        "fixed bottom-24 right-5 z-50 transition-all duration-300 sm:bottom-6",
-        isNearTarget
-          ? "pointer-events-none translate-y-3 opacity-0"
-          : "translate-y-0 opacity-100",
-      ].join(" ")}
+      className={`fixed bottom-6 right-6 z-50 transition ${
+        hidden ? "opacity-0 translate-y-4" : "opacity-100"
+      }`}
     >
       <button
-        type="button"
-        onClick={handleClick}
-        aria-label="Jump to AI assistant"
-        title="Ask Hedge the Edge"
-        className="group relative flex h-[72px] w-[72px] items-center justify-center rounded-full border border-slate-200 bg-white/90 shadow-[0_18px_45px_rgba(15,23,42,0.18)] backdrop-blur transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_55px_rgba(15,23,42,0.22)] active:translate-y-0"
+        onClick={() =>
+          document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth" })
+        }
+        className="relative flex h-16 w-16 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl hover:scale-105 transition"
       >
-        {/* Tooltip */}
-        <span className="pointer-events-none absolute right-[5.25rem] whitespace-nowrap rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition duration-300 group-hover:opacity-100">
-          Ask AI
-        </span>
-
-        {/* Logo container */}
-        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-slate-200 transition duration-300 group-hover:scale-[1.04]">
-          <Image
-            src="/hedge-icon.png"
-            alt="Hedge the Edge"
-            width={44}
-            height={44}
-            className="h-11 w-11 object-cover transition duration-300 group-hover:scale-[1.7]"
-            priority
-          />
-        </div>
+        <span className="absolute h-3 w-3 bg-emerald-400 rounded-full top-2 right-2 animate-pulse" />
+        ✨
       </button>
     </div>
   );
