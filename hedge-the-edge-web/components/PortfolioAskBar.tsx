@@ -31,15 +31,15 @@ type ChatMessage = {
 function buildConversation(
   messages: ChatMessage[]
 ): PortfolioConversationMessage[] {
-  return messages.map((m) => ({
-    role: m.role,
-    content: m.content,
+  return messages.map((message) => ({
+    role: message.role,
+    content: message.content,
   }));
 }
 
 function makeAssistantMessage(response: AskPortfolioResponse): ChatMessage {
   return {
-    id: `assistant-${Date.now()}`,
+    id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role: "assistant",
     content: response.answer,
     why: response.why ?? [],
@@ -47,8 +47,34 @@ function makeAssistantMessage(response: AskPortfolioResponse): ChatMessage {
   };
 }
 
+function getReadableAskError(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return "Unable to get an AI response right now.";
+  }
+
+  const raw = error.message || "Unable to get an AI response right now.";
+  const lower = raw.toLowerCase();
+
+  if (
+    lower.includes("not available") ||
+    lower.includes("ask_portfolio_service") ||
+    lower.includes("ai portfolio chat service")
+  ) {
+    return "AI chat is mounted, but the backend AI service is not available yet.";
+  }
+
+  if (lower.includes("500")) {
+    return "The AI chat request reached the server, but the server could not complete it.";
+  }
+
+  return raw;
+}
+
 function splitIntoParagraphs(text: string): string[] {
-  return text.split(/\n{2,}/).map((x) => x.trim()).filter(Boolean);
+  return text
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 export default function PortfolioAskBar({
@@ -57,155 +83,354 @@ export default function PortfolioAskBar({
   externalAsk = null,
 }: PortfolioAskBarProps) {
   const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isOpen, setIsOpen] = useState(true);
+  const [pendingSelectionContext, setPendingSelectionContext] =
+    useState<SelectionContext | null>(null);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const hasContext = !!aiContext;
 
-  const starterSuggestions = [
-    "What is the main risk in this portfolio?",
-    "Why are the top positions weighted this way?",
-    "How should I interpret the simulation results?",
-    "What matters most before rebalancing?",
-  ];
+  const starterSuggestions = useMemo(
+    () => [
+      "What is the main risk in this portfolio?",
+      "Why are the top positions weighted this way?",
+      "How should I interpret the simulation results?",
+      "What matters most before rebalancing?",
+    ],
+    []
+  );
 
   const submitQuestion = useCallback(
-    async (q?: string) => {
-      const text = (q ?? question).trim();
-      if (!text || !aiContext || loading) return;
+    async (
+      rawQuestion?: string,
+      selectionOverride?: SelectionContext | null
+    ) => {
+      const trimmed = (rawQuestion ?? question).trim();
+
+      if (!trimmed || loading || disabled || !aiContext) {
+        return;
+      }
+
+      const activeSelectionContext =
+        selectionOverride ?? pendingSelectionContext ?? null;
 
       const userMessage: ChatMessage = {
-        id: `user-${Date.now()}`,
+        id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         role: "user",
-        content: text,
+        content: trimmed,
       };
 
       const nextMessages = [...messages, userMessage];
 
       setMessages(nextMessages);
       setQuestion("");
+      setError("");
       setLoading(true);
+      setIsOpen(true);
 
       try {
         const response = await askPortfolio({
-          question: text,
-          ai_context: aiContext,
+          question: trimmed,
+          ai_context: {
+            ...aiContext,
+            selection_context: activeSelectionContext,
+          },
           conversation: buildConversation(nextMessages),
         });
 
         setMessages([...nextMessages, makeAssistantMessage(response)]);
-      } catch {
-        setMessages([
-          ...nextMessages,
-          {
-            id: "error",
-            role: "assistant",
-            content: "AI is temporarily unavailable.",
-          },
-        ]);
+        setPendingSelectionContext(null);
+      } catch (err) {
+        setError(getReadableAskError(err));
       } finally {
         setLoading(false);
       }
     },
-    [question, messages, aiContext, loading]
+    [
+      aiContext,
+      disabled,
+      loading,
+      messages,
+      pendingSelectionContext,
+      question,
+    ]
   );
 
+  useEffect(() => {
+    if (!externalAsk) return;
+
+    setIsOpen(true);
+    setError("");
+    setPendingSelectionContext(externalAsk.selectionContext ?? null);
+    setQuestion(externalAsk.question);
+
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
+  }, [externalAsk?.nonce, externalAsk]);
+
   return (
-    <section className="rounded-[28px] border border-slate-200 bg-gradient-to-b from-white to-slate-50 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur">
-      
-      {/* HEADER */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
+    <section className="overflow-hidden rounded-[28px] border border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(248,250,252,0.96)_100%)] px-5 py-5 shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur">
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex w-full items-start justify-between gap-4 text-left"
+      >
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <h2 className="text-lg font-semibold text-slate-900">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+            </span>
+            <div className="text-lg font-semibold tracking-tight text-slate-950">
               Hedge the Edge AI
-            </h2>
+            </div>
           </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Ask anything about your portfolio — risk, allocation, or scenarios.
+
+          <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-600">
+            Ask follow-up questions about allocation, risk, simulation, and what
+            to monitor next.
           </p>
         </div>
-      </div>
 
-      {/* INPUT */}
-      <div className="flex gap-2">
-        <input
-          ref={inputRef}
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submitQuestion()}
-          placeholder="Ask anything about your portfolio..."
-          className="flex-1 rounded-2xl border border-slate-200 px-5 py-4 text-sm shadow-sm focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 outline-none transition"
-        />
-
-        <button
-          onClick={() => submitQuestion()}
-          disabled={!question.trim() || loading}
-          className="rounded-xl bg-slate-900 text-white px-6 py-3 font-semibold shadow-md hover:bg-slate-800 hover:shadow-lg transition disabled:opacity-50"
-        >
-          {loading ? "..." : "Ask"}
-        </button>
-      </div>
-
-      {/* EMPTY STATE */}
-      {!messages.length && (
-        <div className="mt-4 text-sm text-slate-500">
-          Start a conversation — I’ll help you break down this portfolio.
-        </div>
-      )}
-
-      {/* SUGGESTIONS */}
-      {!messages.length && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {starterSuggestions.map((s) => (
-            <button
-              key={s}
-              onClick={() => submitQuestion(s)}
-              className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-600 hover:bg-white hover:shadow-md transition"
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* CHAT */}
-      <div className="mt-6 space-y-4">
-        {messages.map((m) => (
+        <div className="flex shrink-0 items-center gap-2">
           <div
-            key={m.id}
-            className={
-              m.role === "user"
-                ? "ml-auto max-w-[80%] bg-slate-900 text-white rounded-2xl px-4 py-3"
-                : "max-w-[85%] bg-white border border-slate-200 rounded-2xl px-4 py-4 shadow-sm"
-            }
+            className={[
+              "rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm",
+              hasContext
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-amber-200 bg-amber-50 text-amber-700",
+            ].join(" ")}
           >
-            {m.role === "assistant" ? (
-              <div>
-                <div className="text-xs text-slate-400 mb-2">
-                  Hedge the Edge AI
-                </div>
+            {hasContext ? "Connected to portfolio" : "AI context unavailable"}
+          </div>
 
-                {splitIntoParagraphs(m.content).map((p, i) => (
-                  <p key={i} className="text-sm leading-7 text-slate-800">
-                    {p}
-                  </p>
+          <div className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm">
+            {isOpen ? "Hide" : "Show"}
+          </div>
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="mt-5 border-t border-gradient-to-r from-transparent via-slate-200 to-transparent pt-5">
+          {!hasContext && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+              The chat component is visible, but no AI context was returned from
+              the backend portfolio response.
+            </div>
+          )}
+
+          {pendingSelectionContext?.selected_text ? (
+            <div className="mb-4 rounded-[22px] border border-slate-200 bg-white/80 px-4 py-4 text-sm text-slate-700 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Reference text
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPendingSelectionContext(null)}
+                  className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-500 transition hover:border-slate-300 hover:bg-white hover:text-slate-700"
+                >
+                  Clear
+                </button>
+              </div>
+              <p className="line-clamp-4 leading-6 text-slate-700">
+                “{pendingSelectionContext.selected_text}”
+              </p>
+            </div>
+          ) : null}
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="relative flex-1">
+              <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base text-slate-400">
+                ✦
+              </div>
+
+              <input
+                id="portfolio-ask-input"
+                ref={inputRef}
+                type="text"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    void submitQuestion();
+                  }
+                }}
+                disabled={!hasContext || loading || disabled}
+                placeholder="Ask anything about your portfolio — risk, allocation, or scenarios…"
+                className="w-full rounded-[22px] border border-slate-200 bg-white px-12 py-4 text-sm text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.05)] outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-4 focus:ring-slate-900/5 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void submitQuestion()}
+              disabled={!hasContext || loading || disabled || !question.trim()}
+              className="inline-flex items-center justify-center rounded-[20px] bg-slate-950 px-6 py-4 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition duration-200 hover:-translate-y-0.5 hover:bg-slate-900 hover:shadow-[0_16px_34px_rgba(15,23,42,0.22)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+            >
+              {loading ? "Asking..." : "Ask AI"}
+            </button>
+          </div>
+
+          {!messages.length && hasContext && (
+            <div className="mt-4">
+              <p className="mb-3 text-sm text-slate-500">
+                Start a conversation — try one of these prompts.
+              </p>
+
+              <div className="flex flex-wrap gap-2.5">
+                {starterSuggestions.map((suggestion, index) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => void submitQuestion(suggestion)}
+                    disabled={loading || disabled}
+                    className="rounded-full border border-slate-200 bg-slate-50/90 px-4 py-2.5 text-sm text-slate-600 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:text-slate-900 hover:shadow-[0_8px_20px_rgba(15,23,42,0.08)] disabled:opacity-60"
+                  >
+                    <span className="mr-2 text-slate-400">
+                      {index === 0
+                        ? "⚠️"
+                        : index === 1
+                        ? "🧩"
+                        : index === 2
+                        ? "📊"
+                        : "🔁"}
+                    </span>
+                    {suggestion}
+                  </button>
                 ))}
               </div>
-            ) : (
-              <p>{m.content}</p>
-            )}
-          </div>
-        ))}
+            </div>
+          )}
 
-        {loading && (
-          <div className="text-sm text-slate-500">Thinking...</div>
-        )}
-      </div>
+          {error && (
+            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm">
+              {error}
+            </div>
+          )}
+
+          {messages.length > 0 && (
+            <div className="mt-6 space-y-4">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={[
+                    "rounded-[24px] px-4 py-4 shadow-sm",
+                    message.role === "user"
+                      ? "ml-auto max-w-[85%] border border-slate-200 bg-slate-900 text-white shadow-[0_10px_28px_rgba(15,23,42,0.14)]"
+                      : "max-w-[92%] border border-slate-200 bg-white/90 text-slate-900 shadow-[0_10px_28px_rgba(15,23,42,0.06)]",
+                  ].join(" ")}
+                  data-ask-section={
+                    message.role === "assistant" ? "chat_response" : undefined
+                  }
+                  data-ask-label={
+                    message.role === "assistant" ? "AI response" : undefined
+                  }
+                >
+                  {message.role === "assistant" ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-violet-400/60" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-500" />
+                        </span>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          Hedge the Edge AI
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        {splitIntoParagraphs(message.content).map(
+                          (paragraph, index) => (
+                            <p
+                              key={index}
+                              className={[
+                                "leading-7",
+                                index === 0
+                                  ? "text-[16px] font-medium text-slate-950"
+                                  : "text-[14px] text-slate-700",
+                              ].join(" ")}
+                            >
+                              {paragraph}
+                            </p>
+                          )
+                        )}
+                      </div>
+
+                      {message.why && message.why.length > 0 && (
+                        <details className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                          <summary className="cursor-pointer text-xs font-medium text-slate-500 transition hover:text-slate-700">
+                            Why this matters
+                          </summary>
+                          <div className="mt-3 space-y-2">
+                            {message.why.map((item, i) => (
+                              <div
+                                key={i}
+                                className="text-xs leading-6 text-slate-600"
+                              >
+                                • {item}
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+
+                      {message.followUps && message.followUps.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {message.followUps.map((q, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => void submitQuestion(q)}
+                              disabled={loading || disabled}
+                              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-left text-xs text-slate-500 transition hover:border-slate-300 hover:bg-white hover:text-slate-700 disabled:opacity-60"
+                            >
+                              {q}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+                        You
+                      </div>
+                      <p className="text-sm leading-7 text-white">
+                        {message.content}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {loading && (
+                <div className="max-w-[92%] rounded-[24px] border border-slate-200 bg-white/90 px-4 py-4 text-slate-900 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-violet-400/60" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-500" />
+                    </span>
+                    Hedge the Edge AI
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-slate-400" />
+                    <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-slate-400 [animation-delay:150ms]" />
+                    <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-slate-400 [animation-delay:300ms]" />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
