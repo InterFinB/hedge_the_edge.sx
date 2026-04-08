@@ -701,25 +701,59 @@ export function RiskContributionChart({
    simulation distribution chart
 ========================================================= */
 
-function normalizeSimulationChart(input: unknown) {
+type SimulationDistributionRow = {
+  bucketLabel: string;
+  bucketValue: number | null;
+  simulationCount: number;
+};
+
+function normalizeSimulationChart(input: unknown): SimulationDistributionRow[] {
   if (Array.isArray(input)) {
     return input
       .map((item: any) => {
         const rawBucket =
-          item.bin ?? item.x ?? item.return ?? item.center ?? item.label ?? "";
-        const rawCount = item.count ?? item.frequency ?? item.y ?? item.value ?? 0;
+          item.label ??
+          item.bin_center ??
+          item.bin ??
+          item.x ??
+          item.return ??
+          item.center ??
+          "";
+
+        const rawCount =
+          item.frequency ??
+          item.count ??
+          item.simulationCount ??
+          item.y ??
+          item.value ??
+          0;
+
+        const bucketValue =
+          typeof item.bin_center === "number"
+            ? item.bin_center
+            : typeof rawBucket === "number"
+            ? rawBucket
+            : null;
 
         const bucketLabel =
-          typeof rawBucket === "number"
-            ? `${(rawBucket * 100).toFixed(1)}%`
-            : String(rawBucket);
+          typeof item.label === "string" && item.label.trim().length > 0
+            ? item.label
+            : typeof bucketValue === "number"
+            ? `${(bucketValue * 100).toFixed(1)}%`
+            : String(rawBucket ?? "").trim();
 
         return {
           bucketLabel,
+          bucketValue,
           simulationCount: Number(rawCount),
         };
       })
-      .filter((d) => !Number.isNaN(d.simulationCount));
+      .filter(
+        (d) =>
+          !Number.isNaN(d.simulationCount) &&
+          d.bucketLabel !== "" &&
+          d.bucketLabel !== "NaN"
+      );
   }
 
   if (
@@ -734,6 +768,7 @@ function normalizeSimulationChart(input: unknown) {
     return bins.map((bin, idx) => ({
       bucketLabel:
         typeof bin === "number" ? `${(bin * 100).toFixed(1)}%` : String(bin),
+      bucketValue: typeof bin === "number" ? bin : null,
       simulationCount: Number(counts[idx] ?? 0),
     }));
   }
@@ -806,7 +841,7 @@ export function SimulationDistributionChart({
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
-            margin={{ top: 6, right: 8, left: 0, bottom: 0 }}
+            margin={{ top: 6, right: 8, left: 0, bottom: 8 }}
           >
             <CartesianGrid
               strokeDasharray="3 3"
@@ -818,15 +853,18 @@ export function SimulationDistributionChart({
               fontSize={11}
               tickLine={false}
               axisLine={false}
+              interval="preserveStartEnd"
+              minTickGap={20}
             />
             <YAxis
               fontSize={11}
               tickLine={false}
               axisLine={false}
+              allowDecimals={false}
               domain={[0, Math.max(5, Math.ceil(maxCount * 1.1))]}
             />
             <Tooltip content={<SimulationDistributionTooltip />} />
-            <Bar dataKey="simulationCount" radius={[8, 8, 0, 0]} />
+            <Bar dataKey="simulationCount" fill="#7c3aed" radius={[8, 8, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -854,7 +892,11 @@ export function SimulationSummary({ result }: { result: PortfolioResponse }) {
   ];
 
   return (
-    <Box title="Simulation summary" askSection="simulation" askLabel="Simulation summary">
+    <Box
+      title="Simulation summary"
+      askSection="simulation"
+      askLabel="Simulation summary"
+    >
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {cards.map((item) => (
           <div

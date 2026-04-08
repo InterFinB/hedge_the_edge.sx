@@ -21,7 +21,7 @@ export type ExplanationBlock =
       risk_commentary?: string[] | string;
       simulation_commentary?: string[] | string;
       watch_for?: string | string[];
-      takeaways?: string | string[];
+      takeaways?: string[] | string;
       vocabulary?: Record<string, string> | string[] | string;
       [key: string]: unknown;
     };
@@ -32,8 +32,15 @@ export type ChartDatum = {
   name?: string;
   value?: number;
   bin?: number | string;
+  bin_start?: number;
+  bin_end?: number;
+  bin_center?: number;
+  label?: string;
+  bucketLabel?: string;
+  bucketValue?: number;
   count?: number;
   frequency?: number;
+  simulationCount?: number;
   x?: number | string;
   y?: number;
   [key: string]: unknown;
@@ -243,7 +250,7 @@ export type PortfolioResponse = {
   recompute_schedule?: string | number;
   simulation?: SimulationCompact;
   simulation_summary?: SimulationSummaryData;
-  simulation_chart?: unknown;
+  simulation_chart?: ChartDatum[] | unknown;
   portfolio_timing?: PortfolioTiming;
   universe_status?: UniverseStatus;
   explanation_input?: ExplanationInputBlock;

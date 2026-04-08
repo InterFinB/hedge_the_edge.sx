@@ -76,21 +76,36 @@ def prepare_simulation_chart_data(
 ) -> list[dict]:
     """
     Convert simulated returns into histogram-style chart data for the frontend.
+
+    Returned fields:
+      - bin_start: left edge of the bucket, decimal form
+      - bin_end: right edge of the bucket, decimal form
+      - bin_center: midpoint of the bucket, decimal form
+      - frequency: count of simulations in the bucket
+      - count: alias of frequency for frontend compatibility
+      - label: preformatted display label, e.g. "4.2% to 5.1%"
     """
     if simulated_returns is None or len(simulated_returns) == 0:
         return []
 
     counts, bin_edges = np.histogram(simulated_returns, bins=n_bins)
 
-    chart_data = []
+    chart_data: list[dict] = []
+
     for i in range(len(counts)):
-        bin_center = float((bin_edges[i] + bin_edges[i + 1]) / 2)
+        bin_start = float(bin_edges[i])
+        bin_end = float(bin_edges[i + 1])
+        bin_center = float((bin_start + bin_end) / 2)
         frequency = int(counts[i])
 
         chart_data.append(
             {
+                "bin_start": bin_start,
+                "bin_end": bin_end,
                 "bin_center": bin_center,
                 "frequency": frequency,
+                "count": frequency,
+                "label": f"{bin_start * 100:.1f}% to {bin_end * 100:.1f}%",
             }
         )
 
